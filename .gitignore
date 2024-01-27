@@ -1,0 +1,20 @@
+# Dependency directories
+node_modules/
+npm-debug.log
+
+# Built files
+dist/
+build/
+
+# Environment variables
+.env
+
+# IDE files
+.vscode/
+.idea/
+
+# Miscellaneous
+*.log
+*.zip
+*.tgz
+.DS_Store

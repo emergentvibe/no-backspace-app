@@ -1,0 +1,32 @@
+/* globalStyles.css */
+
+:root {
+    --font-family: 'Helvetica', sans-serif;
+    --text-color: #333;
+    --background-color: #f5f5f5;
+    --title-font-size: 32px;
+    --title-font-weight: bold;
+    --subtitle-font-size: 20px;
+    --subtitle-font-weight: lighter;
+  }
+  
+  body {
+    font-family: var(--font-family);
+    color: var(--text-color);
+    background-color: var(--background-color);
+  }
+  
+  h1 {
+    font-size: var(--title-font-size);
+    font-weight: var(--title-font-weight);
+  }
+  
+  h2 {
+    font-size: var(--subtitle-font-size);
+    font-weight: var(--subtitle-font-weight);
+  }
+ 
+
+  
+  /* Rest of the styles */
+  
