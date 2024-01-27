@@ -14,21 +14,15 @@ no_backspace_app is a minimalist note-taking web application designed to provide
 
 To get started with no_backspace_app, follow these steps:
 
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/your-username/no_backspace_app.git
-   ```
-
-2. Install dependencies:
+1. Install dependencies:
 
     ```bash
     cd no_backspace_app
     npm install
     ```
 
-3. Run the development server:
+2. Run the development server:
     ```bash
     npm run react-start
     ```
-4. Open your browser and navigate to http://localhost:3000 to view the app.
+3. Open your browser and navigate to http://localhost:3000 to view the app.
