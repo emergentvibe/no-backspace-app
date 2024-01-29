@@ -1,23 +1,21 @@
-// TypingPage.js
-
-import React, { useState, useRef, useEffect } from 'react';
-import './TypingPage.css'; // Import the styles
+import React, { useState, useEffect, useRef } from 'react';
+import { createSession } from '../services/sessionService';
+import './TypingPage.css';
 
 function TypingPage() {
     const [input, setInput] = useState('');
-    const containerRef = useRef(null);
 
+    // Load data from localStorage when component mounts
     useEffect(() => {
-        const container = containerRef.current;
-        const containerWidth = container.clientWidth;
-        const textWidth = container.scrollWidth;
-
-        // If the text is wider than the container, shift the text to the left
-        if (textWidth > containerWidth) {
-            container.style.marginLeft = `-${textWidth - containerWidth}px`;
-        } else {
-            container.style.marginLeft = '0';
+        const savedInput = localStorage.getItem('typingData');
+        if (savedInput) {
+            setInput(savedInput);
         }
+    }, []);
+
+    // Save data to localStorage whenever input changes
+    useEffect(() => {
+        localStorage.setItem('typingData', input);
     }, [input]);
 
     const handleInputChange = (e) => {
@@ -30,18 +28,30 @@ function TypingPage() {
 
     const inputRef = useRef(null);
 
-    return (
+    const handleClearEditor = () => {
+        setInput('');
+    };
 
+    const handleSaveSession = async () => {
+        try {
+            await createSession(input);
+        } catch (error) {
+            console.error('Error saving session:', error);
+        }
+    };
+
+    return (
         <div>
             <div style={{ textAlign: 'center' }}>
                 <h2>Typing Page</h2>
+                <button onClick={handleSaveSession}>Save Session</button>
+                <button onClick={handleClearEditor}>New Session</button>
             </div>
             <div
-                ref={containerRef}
                 onClick={handleContainerClick}
-                className="editor-container" // Use the class name for styling
+                className="editor-container"
             >
-                <div className="text-container"> {/* Use the class name for styling */}
+                <div className="text-container">
                     <span>{input}</span>
                     <span className="blink">|</span>
                 </div>
@@ -50,8 +60,9 @@ function TypingPage() {
                     type="text"
                     value={input}
                     onChange={handleInputChange}
-                    className="editor-input" // Use the class name for styling
+                    className="editor-input"
                 />
+
             </div>
         </div>
     );
