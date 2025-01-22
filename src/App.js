@@ -11,20 +11,47 @@ import './globalStyles.css'; // Import the global CSS file
 function App() {
     return (
         <Router>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', padding: '0 20px', alignItems: 'center' }}>
-                    <div>
-                        <h1>no_backspace_</h1>
-                        <h2>the minimalist note taking app</h2>
+            <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column',
+                minHeight: '100vh',
+                backgroundColor: 'var(--color-bg)'
+            }}>
+                <header style={{ 
+                    height: 'var(--navbar-height)',
+                    backgroundColor: 'var(--color-bg-alt)',
+                    borderBottom: '1px solid var(--color-border)',
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000
+                }}>
+                    <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        height: '100%',
+                        padding: '0 var(--spacing-xl)'
+                    }}>
+                        <div>
+                            <h1>no_backspace_</h1>
+                            <h2>the minimalist note taking app</h2>
+                        </div>
+                        <NavBar />
                     </div>
-                    <NavBar />
-                </div>
-                <Routes>
-                    <Route path="/" exact element={<TypingPage />} />
-                    <Route path="/explorer" element={<ExplorerPage />} />
-                    <Route path="/composer" element={<ComposerPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                </Routes>
+                </header>
+                <main style={{ 
+                    marginTop: 'var(--navbar-height)',
+                    flex: 1
+                }}>
+                    <Routes>
+                        <Route path="/" exact element={<TypingPage />} />
+                        <Route path="/explorer" element={<ExplorerPage />} />
+                        <Route path="/composer" element={<ComposerPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                    </Routes>
+                </main>
             </div>
         </Router>
     );
@@ -33,18 +60,24 @@ function App() {
 function NavBar() {
     return (
         <nav>
-            <ul style={{ listStyleType: 'none', padding: '0', margin: '0' }}>
-                <li style={{ display: 'inline', margin: '0 10px' }}>
-                    <NavLink to="/" className="nav-link" activeClassName="active">Typer</NavLink>
+            <ul style={{ 
+                listStyleType: 'none', 
+                padding: 0, 
+                margin: 0,
+                display: 'flex',
+                gap: 'var(--spacing-md)'
+            }}>
+                <li>
+                    <NavLink to="/" className="nav-link">Typer</NavLink>
                 </li>
-                <li style={{ display: 'inline', margin: '0 10px' }}>
-                    <NavLink to="/explorer" className="nav-link" activeClassName="active">Explorer</NavLink>
+                <li>
+                    <NavLink to="/explorer" className="nav-link">Explorer</NavLink>
                 </li>
-                <li style={{ display: 'inline', margin: '0 10px' }}>
-                    <NavLink to="/composer" className="nav-link" activeClassName="active">Composer</NavLink>
+                <li>
+                    <NavLink to="/composer" className="nav-link">Composer</NavLink>
                 </li>
-                <li style={{ display: 'inline', margin: '0 10px' }}>
-                    <NavLink to="/settings" className="nav-link" activeClassName="active">Settings</NavLink>
+                <li>
+                    <NavLink to="/settings" className="nav-link">Settings</NavLink>
                 </li>
             </ul>
         </nav>

@@ -33,3 +33,27 @@ export const getSessions = async () => {
     throw error;
   }
 };
+
+export const searchSessions = async (query) => {
+  try {
+    console.log('Making search request for query:', query);
+    const url = `${API_URL}/sessions/search?query=${encodeURIComponent(query)}`;
+    console.log('Request URL:', url);
+    
+    const response = await fetch(url);
+    console.log('Search response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Search error response:', errorText);
+      throw new Error('Failed to search sessions');
+    }
+    
+    const data = await response.json();
+    console.log('Search results:', data);
+    return data;
+  } catch (error) {
+    console.error('Error searching sessions:', error);
+    throw error;
+  }
+};

@@ -19,7 +19,7 @@
 .text-container {
     position: absolute;
     left: 50%; /* Center horizontally */
-    top: 50%;
+    top: 25%;
     transform: translateX(-100%); /* Adjust for centering */
 }
 
@@ -30,6 +30,14 @@
 
 .blink {
     animation: blink-animation 2s infinite; /* 1s duration, infinite iterations */
+}
+
+.gradient-overlay {
+    position: absolute;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(to right, #f5f5f5, rgba(255, 255, 255, 0));
+    pointer-events: none; /* Make the overlay transparent to clicks */
 }
 
 @keyframes blink-animation {
