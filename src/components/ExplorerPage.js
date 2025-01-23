@@ -9,6 +9,7 @@ const ExplorerPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchSessions();
@@ -16,28 +17,29 @@ const ExplorerPage = () => {
 
   const fetchSessions = async () => {
     try {
-      const sessionsData = await getSessions();
-      setSessions(sessionsData.sessions);
+      const data = await getSessions();
+      setSessions(data || []); // Ensure we always have an array
+      setError(null);
     } catch (error) {
       console.error('Error fetching sessions:', error);
+      setError('Failed to load sessions');
+      setSessions([]); // Set empty array on error
     }
   };
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!searchQuery.trim()) {
-      fetchSessions();
-      return;
-    }
-    
+    if (!searchQuery.trim()) return;
+
     setIsSearching(true);
     try {
       const results = await searchSessions(searchQuery);
-      setSessions(results.results);
-      // Clear selected session when search results change
-      setSelectedSession(null);
+      setSessions(results || []); // Ensure we always have an array
+      setError(null);
     } catch (error) {
-      console.error('Error searching sessions:', error);
+      console.error('Search error:', error);
+      setError('Search failed');
+      setSessions([]); // Set empty array on error
     } finally {
       setIsSearching(false);
     }
@@ -76,19 +78,20 @@ const ExplorerPage = () => {
           borderBottom: '1px solid var(--color-border)',
           backgroundColor: 'var(--color-bg-alt)'
         }}>
-          <form onSubmit={handleSearch}>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search your notes..."
-              className="input"
-            />
+          <form onSubmit={handleSearch} className="search-form">
+            <div style={{ flex: 1 }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search notes..."
+                className="input"
+              />
+            </div>
             <button 
               type="submit"
               disabled={isSearching}
               className={`btn btn-primary ${isSearching ? 'disabled' : ''}`}
-              style={{ marginTop: 'var(--spacing-sm)', width: '100%' }}
             >
               {isSearching ? 'Searching...' : 'Search'}
             </button>
@@ -100,11 +103,12 @@ const ExplorerPage = () => {
           flex: 1,
           padding: 'var(--spacing-md)'
         }}>
+          {error && <div className="error-message">{error}</div>}
           {sessions.map((session) => (
             <div 
-              key={session._id || Math.random()}
+              key={session._id || session.id}
               onClick={() => setSelectedSession(session)}
-              className="card"
+              className={`session-item ${selectedSession?._id === session._id ? 'selected' : ''}`}
               style={{
                 marginBottom: 'var(--spacing-sm)',
                 cursor: 'pointer',

@@ -177,4 +177,101 @@ h2 {
   background-color: var(--color-text-light);
   border-radius: 3px;
 }
+
+/* Explorer Page Styles */
+.explorer-container {
+    display: flex;
+    height: 100vh;
+    padding: 20px;
+    gap: 20px;
+}
+
+.sidebar {
+    width: 300px;
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+}
+
+.search-form {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    align-items: center;
+}
+
+.search-form .input {
+    width: 100%;
+    min-width: 0; /* Allows input to shrink */
+}
+
+.search-form .btn {
+    white-space: nowrap;
+    min-width: fit-content;
+}
+
+.sessions-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.session-item {
+    padding: 10px;
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    background: var(--color-bg);
+}
+
+.session-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.session-item.selected {
+    background: var(--color-bg-selected);
+}
+
+.session-text {
+    margin-bottom: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.session-meta {
+    font-size: 0.8em;
+    color: var(--color-text-secondary);
+    display: flex;
+    justify-content: space-between;
+}
+
+.similarity {
+    color: var(--color-success);
+}
+
+.main-content {
+    flex: 1;
+    padding: 20px;
+    background: var(--color-bg-alt);
+    border-radius: 4px;
+}
+
+.session-detail {
+    white-space: pre-wrap;
+}
+
+.no-selection {
+    color: var(--color-text-secondary);
+    text-align: center;
+    margin-top: 20px;
+}
+
+.error-message {
+    color: var(--color-error);
+    padding: 10px;
+    margin-bottom: 10px;
+    background: var(--color-error-bg);
+    border-radius: 4px;
+}
   
