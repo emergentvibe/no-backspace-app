@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createSession } from '../services/sessionService';
+import { useNavigate } from 'react-router-dom';
 import './TypingPage.css';
 import '../globalStyles.css';
 
 function TypingPage() {
     const [input, setInput] = useState('');
+    const navigate = useNavigate();
 
     // Load data from localStorage when component mounts
     useEffect(() => {
@@ -46,6 +48,7 @@ function TypingPage() {
         try {
             await createSession(input);
             setInput(''); // Clear input after successful save
+            navigate('/explorer'); // Navigate to explorer page after saving
         } catch (error) {
             console.error('Error saving session:', error);
         }

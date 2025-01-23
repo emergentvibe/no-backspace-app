@@ -14,7 +14,8 @@ export const createSession = async (text) => {
     if (!response.ok) {
       throw new Error('Failed to create session');
     }
-    return await response.json();
+    const data = await response.json();
+    return data.session; // Return just the session object
   } catch (error) {
     console.error('Error creating session:', error);
     throw error;
@@ -27,7 +28,8 @@ export const getSessions = async () => {
     if (!response.ok) {
       throw new Error('Failed to fetch sessions');
     }
-    return await response.json();
+    const data = await response.json();
+    return data; // Return the array of sessions
   } catch (error) {
     console.error('Error fetching sessions:', error);
     throw error;
@@ -49,9 +51,16 @@ export const searchSessions = async (query) => {
       throw new Error('Failed to search sessions');
     }
     
-    const data = await response.json();
-    console.log('Search results:', data);
-    return data;
+    const { results } = await response.json();
+    console.log('Search results:', results);
+    
+    // Return the results array, ensuring each result has title and summary
+    return results.map(result => ({
+      ...result,
+      _id: result.id, // Ensure _id is set for consistency with regular sessions
+      title: result.title || 'Untitled Note',
+      summary: result.summary || result.text
+    }));
   } catch (error) {
     console.error('Error searching sessions:', error);
     throw error;

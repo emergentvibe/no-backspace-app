@@ -1,106 +1,9 @@
 // frontend/src/components/ExplorerPage.js
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getSessions, searchSessions } from '../services/sessionService';
 import '../globalStyles.css';
-
-const HighlightedText = ({ text, chunks }) => {
-  console.log('HighlightedText received:', {
-    textLength: text?.length,
-    textPreview: text?.slice(0, 50),
-    hasChunks: Boolean(chunks),
-    chunksLength: chunks?.length,
-    chunks: JSON.stringify(chunks)  // Better debug view of chunks
-  });
-  
-  // Return plain text if:
-  // 1. No chunks provided
-  // 2. Empty chunks array
-  // 3. Chunks without valid offsets
-  if (!chunks || 
-      !Array.isArray(chunks) || 
-      chunks.length === 0 || 
-      !chunks.some(chunk => chunk?.startOffset >= 0 && chunk?.endOffset > chunk?.startOffset)) {
-    console.log('No valid chunks to highlight, returning plain text');
-    return <div>{text}</div>;
-  }
-  
-  // Filter out invalid chunks and sort remaining ones
-  const validChunks = chunks.filter(chunk => 
-    chunk && 
-    typeof chunk.startOffset === 'number' && 
-    typeof chunk.endOffset === 'number' && 
-    chunk.startOffset >= 0 && 
-    chunk.endOffset > chunk.startOffset &&
-    chunk.endOffset <= text.length
-  );
-
-  if (validChunks.length === 0) {
-    console.log('No valid chunks after filtering, returning plain text');
-    return <div>{text}</div>;
-  }
-
-  const sortedChunks = [...validChunks].sort((a, b) => a.startOffset - b.startOffset);
-  console.log('Valid chunks to highlight:', sortedChunks.map(chunk => ({
-    text: text.slice(chunk.startOffset, chunk.endOffset),
-    ...chunk
-  })));
-  
-  // Build the text pieces with highlights
-  let lastIndex = 0;
-  const pieces = [];
-  
-  sortedChunks.forEach((chunk, index) => {
-    console.log(`Processing chunk ${index}:`, {
-      startOffset: chunk.startOffset,
-      endOffset: chunk.endOffset,
-      chunkText: text.slice(chunk.startOffset, chunk.endOffset),
-      beforeText: text.slice(lastIndex, chunk.startOffset)
-    });
-    
-    // Add text before this chunk
-    if (chunk.startOffset > lastIndex) {
-      pieces.push(
-        <span key={`text-${index}`}>
-          {text.slice(lastIndex, chunk.startOffset)}
-        </span>
-      );
-    }
-    
-    // Add highlighted chunk
-    pieces.push(
-      <span 
-        key={`highlight-${index}`} 
-        style={{ backgroundColor: '#ffd70066', padding: '0 2px' }}
-      >
-        {text.slice(chunk.startOffset, chunk.endOffset)}
-      </span>
-    );
-    
-    lastIndex = chunk.endOffset;
-  });
-  
-  // Add any remaining text
-  if (lastIndex < text.length) {
-    console.log('Adding remaining text:', {
-      from: lastIndex,
-      to: text.length,
-      text: text.slice(lastIndex)
-    });
-    pieces.push(
-      <span key="text-end">
-        {text.slice(lastIndex)}
-      </span>
-    );
-  }
-  
-  console.log('Final pieces array:', pieces.map(piece => ({
-    type: piece.key,
-    text: piece.props.children
-  })));
-  
-  return <div>{pieces}</div>;
-};
 
 const ExplorerPage = () => {
   const [sessions, setSessions] = useState([]);
@@ -109,9 +12,26 @@ const ExplorerPage = () => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState(null);
+  const location = useLocation();
 
   useEffect(() => {
     fetchSessions();
+  }, [location]); // Refresh when location changes (i.e., when navigating to this page)
+
+  useEffect(() => {
+    // Set up visibility change listener
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchSessions();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Clean up
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const fetchSessions = async () => {
@@ -136,20 +56,8 @@ const ExplorerPage = () => {
     
     setIsSearching(true);
     try {
-      const response = await fetch(`http://localhost:4000/sessions/search?query=${encodeURIComponent(searchQuery)}`);
-      const results = await response.json();
-      console.log('Search results received:', {
-        count: results.length,
-        results: results.map(r => ({
-          id: r.id,
-          textLength: r.text?.length,
-          hasChunk: Boolean(r.chunk),
-          hasChunks: Boolean(r.chunks),
-          chunk: r.chunk,
-          chunks: r.chunks,
-          similarity: r.similarity
-        }))
-      });
+      const results = await searchSessions(searchQuery);
+      console.log('Search results received:', results);
       setSearchResults(results);
       setSelectedSession(null); // Clear selection when search results change
     } catch (error) {
@@ -161,11 +69,6 @@ const ExplorerPage = () => {
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString();
-  };
-
-  const truncateText = (text, maxLength = 100) => {
-    if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength) + '...';
   };
 
   // Determine which sessions to show in sidebar
@@ -228,17 +131,7 @@ const ExplorerPage = () => {
               {displayedSessions.map(session => (
                 <div
                   key={session._id || session.id}
-                  onClick={() => {
-                    console.log('Selected session:', {
-                      id: session._id || session.id,
-                      textLength: session.text?.length,
-                      hasChunk: Boolean(session.chunk),
-                      hasChunks: Boolean(session.chunks),
-                      chunk: session.chunk,
-                      chunks: session.chunks
-                    });
-                    setSelectedSession(session);
-                  }}
+                  onClick={() => setSelectedSession(session)}
                   style={{
                     padding: 'var(--spacing-sm)',
                     marginBottom: 'var(--spacing-sm)',
@@ -251,7 +144,9 @@ const ExplorerPage = () => {
                   <div className="text-light" style={{ fontSize: 'var(--font-size-small)', marginBottom: 'var(--spacing-xs)' }}>
                     {formatDate(session.createdAt)}
                   </div>
-                  <div className="mono">{truncateText(session.text)}</div>
+                  <div className="mono" style={{ fontWeight: 'bold', marginBottom: 'var(--spacing-xs)' }}>
+                    {session.title || 'Untitled Note'}
+                  </div>
                   {session.similarity && (
                     <div style={{ fontSize: 'var(--font-size-small)', color: 'var(--color-primary)', marginTop: 'var(--spacing-xs)' }}>
                       Similarity: {(parseFloat(session.similarity) * 100).toFixed(1)}%
@@ -295,10 +190,7 @@ const ExplorerPage = () => {
                 padding: 'var(--spacing-xl)',
                 fontSize: 'var(--font-size-base)'
               }}>
-                <HighlightedText 
-                  text={selectedSession.text} 
-                  chunks={searchResults.length > 0 ? (selectedSession.chunks || [selectedSession.chunk].filter(Boolean)) : []} 
-                />
+                {selectedSession.summary || 'No summary available'}
               </div>
             </div>
           ) : (
