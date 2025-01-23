@@ -190,7 +190,15 @@ const ExplorerPage = () => {
                 padding: 'var(--spacing-xl)',
                 fontSize: 'var(--font-size-base)'
               }}>
-                {selectedSession.summary || 'No summary available'}
+                {(() => {
+                  console.log('Displaying session:', {
+                    id: selectedSession._id,
+                    titleLength: selectedSession.title?.length,
+                    summaryLength: selectedSession.summary?.length,
+                    summary: selectedSession.summary
+                  });
+                  return selectedSession.summary || 'No summary available';
+                })()}
               </div>
             </div>
           ) : (

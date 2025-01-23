@@ -29,6 +29,12 @@ export const getSessions = async () => {
       throw new Error('Failed to fetch sessions');
     }
     const data = await response.json();
+    console.log('Received sessions:', data.map(session => ({
+      id: session._id,
+      titleLength: session.title?.length,
+      summaryLength: session.summary?.length,
+      summary: session.summary
+    })));
     return data; // Return the array of sessions
   } catch (error) {
     console.error('Error fetching sessions:', error);
@@ -52,7 +58,12 @@ export const searchSessions = async (query) => {
     }
     
     const { results } = await response.json();
-    console.log('Search results:', results);
+    console.log('Search results:', results.map(result => ({
+      id: result.id,
+      titleLength: result.title?.length,
+      summaryLength: result.summary?.length,
+      summary: result.summary
+    })));
     
     // Return the results array, ensuring each result has title and summary
     return results.map(result => ({
