@@ -1,31 +1,69 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createSession } from '../services/sessionService';
-import { useNavigate } from 'react-router-dom';
 import './TypingPage.css';
 import '../globalStyles.css';
 
 function TypingPage() {
     const [input, setInput] = useState('');
-    const navigate = useNavigate();
+    const [staleIndex, setStaleIndex] = useState(-1);
+    const [showInactivityWarning, setShowInactivityWarning] = useState(false);
+    const inactivityTimeout = useRef(null);
+    const typingTimeout = useRef(null);
+    const inputRef = useRef(null);
 
-    // Load data from localStorage when component mounts
+    // Clear state when component mounts
     useEffect(() => {
-        const savedInput = localStorage.getItem('typingData');
-        if (savedInput) {
-            setInput(savedInput);
-        }
+        setInput('');
+        setStaleIndex(-1);
+        setShowInactivityWarning(false);
     }, []);
 
-    // Save data to localStorage whenever input changes
+    // Cleanup on unmount
     useEffect(() => {
-        localStorage.setItem('typingData', input);
-    }, [input]);
+        return () => {
+            if (inactivityTimeout.current) clearTimeout(inactivityTimeout.current);
+            if (typingTimeout.current) clearTimeout(typingTimeout.current);
+        };
+    }, []);
 
-    const handleInputChange = (e) => {
-        setInput(e.target.value);
+    const handleSaveAndClear = async () => {
+        if (!input.trim()) return;
+        
+        try {
+            await createSession(input);
+            setInput('');
+            setStaleIndex(-1);
+            setShowInactivityWarning(false);
+        } catch (error) {
+            console.error('Error saving session:', error);
+        }
     };
 
-    // Prevent backspace and delete keys
+    const handleInputChange = (e) => {
+        const newText = e.target.value;
+        setInput(newText);
+        setShowInactivityWarning(false);
+
+        // Reset typing timeout (for fading)
+        if (typingTimeout.current) {
+            clearTimeout(typingTimeout.current);
+        }
+        typingTimeout.current = setTimeout(() => {
+            setStaleIndex(newText.length);
+        }, 5000);
+
+        // Reset inactivity timer
+        if (inactivityTimeout.current) {
+            clearTimeout(inactivityTimeout.current);
+        }
+
+        // Show warning after 20s, save after 2m
+        inactivityTimeout.current = setTimeout(() => {
+            setShowInactivityWarning(true);
+            setTimeout(handleSaveAndClear, 100000); // 100s more after warning
+        }, 20000);
+    };
+
     const handleKeyDown = (e) => {
         if (e.key === 'Backspace' || e.key === 'Delete') {
             e.preventDefault();
@@ -37,55 +75,29 @@ function TypingPage() {
         inputRef.current.focus();
     };
 
-    const inputRef = useRef(null);
-
-    const handleClearEditor = () => {
-        setInput('');
-    };
-
-    const handleSaveSession = async () => {
-        if (!input.trim()) return; // Don't save empty sessions
-        try {
-            await createSession(input);
-            setInput(''); // Clear input after successful save
-            navigate('/explorer'); // Navigate to explorer page after saving
-        } catch (error) {
-            console.error('Error saving session:', error);
-        }
-    };
-
     return (
         <div>
-            {/* Controls */}
-            <div style={{ 
-                position: 'fixed',
-                top: 'var(--navbar-height)',
-                left: 0,
-                right: 0,
-                padding: 'var(--spacing-md)',
-                backgroundColor: 'var(--color-bg-alt)',
-                borderBottom: '1px solid var(--color-border)',
-                display: 'flex',
-                justifyContent: 'center',
-                gap: 'var(--spacing-md)',
-                zIndex: 10
-            }}>
-                <button onClick={handleSaveSession} className="btn btn-primary" disabled={!input.trim()}>
-                    Save Note
-                </button>
-                <button onClick={handleClearEditor} className="btn" disabled={!input.trim()}>
-                    New Note
-                </button>
+            <div 
+                className="inactivity-indicator" 
+                style={{ 
+                    opacity: showInactivityWarning ? 1 : 0,
+                    transform: showInactivityWarning ? 'translateY(0)' : 'translateY(10px)'
+                }}
+            >
+                <span>Inactivity detected, session will be auto-saved soon</span>
+                {showInactivityWarning && <div className="countdown-circle" />}
             </div>
-
-            {/* Editor */}
+            
             <div
                 onClick={handleContainerClick}
                 className="editor-container"
-                style={{ marginTop: 'var(--spacing-xl)' }}
             >
                 <div className="text-container mono">
-                    <span>{input}</span>
+                    {input.split('').map((char, index) => (
+                        <span key={index} style={{ opacity: index < staleIndex ? 0 : 1 }}>
+                            {char}
+                        </span>
+                    ))}
                     <span className="blink">|</span>
                 </div>
                 <input
@@ -98,7 +110,6 @@ function TypingPage() {
                 />
                 <div className="gradient-overlay"></div>
                 
-                {/* Character Counter */}
                 <div style={{
                     position: 'fixed',
                     bottom: 'var(--spacing-md)',

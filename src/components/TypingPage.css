@@ -1,4 +1,3 @@
-
 .editor-container {
     width: 100vw;
     height: 100vh;
@@ -6,30 +5,34 @@
     alignItems: center;
     justifyContent: center;
     overflow: hidden;
-    color: #000; /* White text color */
+    color: #000;
     font-size: 24px;
-    white-space: nowrap; /* Prevent text from wrapping */
-    text-align: right; /* Align text to the right */
-    position: relative; /* Added for absolute positioning */
-    overflow: hidden; /* Hide both horizontal and vertical scroll bars */
-    scrollbar-width: thin; /* Firefox */
-    scrollbar-color: transparent transparent; /* Firefox */
+    white-space: nowrap;
+    text-align: right;
+    position: relative;
+    overflow: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
 }
 
 .text-container {
     position: absolute;
-    left: 50%; /* Center horizontally */
+    left: 50%;
     top: 25%;
-    transform: translateX(-100%); /* Adjust for centering */
+    transform: translateX(-100%);
+}
+
+.text-container span {
+    transition: opacity 2s ease-out;
 }
 
 .editor-input {
     position: absolute;
-    top: -9999px; /* Move the input off-screen */
+    top: -9999px;
 }
 
 .blink {
-    animation: blink-animation 2s infinite; /* 1s duration, infinite iterations */
+    animation: blink-animation 2s infinite;
 }
 
 .gradient-overlay {
@@ -37,14 +40,95 @@
     width: 50%;
     height: 100%;
     background: linear-gradient(to right, #f5f5f5, rgba(255, 255, 255, 0));
-    pointer-events: none; /* Make the overlay transparent to clicks */
+    pointer-events: none;
+}
+
+.inactivity-indicator {
+    position: fixed;
+    bottom: var(--spacing-md);
+    right: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    z-index: 10;
+    font-size: var(--font-size-small);
+    color: var(--color-text-light);
+    font-family: var(--font-mono);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+}
+
+.inactivity-indicator.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.countdown-circle {
+    width: 16px;
+    height: 16px;
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    border-radius: 50%;
+    background: var(--color-text-light);
+    opacity: 0.15;
+}
+
+.countdown-circle::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: var(--color-bg);
+    transform-origin: 50% 50%;
+    transform: rotate(0deg);
+    animation: countdown 100s linear;
 }
 
 @keyframes blink-animation {
     0%, 50%, 100% {
-        opacity: 1; /* Fully visible */
+        opacity: 1;
     }
     25%, 75% {
-        opacity: 0; /* Invisible */
+        opacity: 0;
     }
+}
+
+@keyframes countdown {
+    0% {
+        clip-path: polygon(50% 50%, 50% 0%, 50% 0%, 50% 0%);
+    }
+    12.5% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 0%);
+    }
+    25% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 50%);
+    }
+    37.5% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%);
+    }
+    50% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 50% 100%);
+    }
+    62.5% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 0% 100%);
+    }
+    75% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 50%);
+    }
+    87.5% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%);
+    }
+    100% {
+        clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 50% 0%);
+    }
+}
+
+.mono {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono);
 }

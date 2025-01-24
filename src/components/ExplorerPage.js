@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { getSessions, searchSessions } from '../services/sessionService';
+import { getSessions, searchSessions, searchWithinSession } from '../services/sessionService';
+import HighlightedText from './HighlightedText';
 import '../globalStyles.css';
 
 const ExplorerPage = () => {
@@ -12,6 +13,9 @@ const ExplorerPage = () => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState(null);
+  const [highlights, setHighlights] = useState([]);
+  const [isSearchingIdea, setIsSearchingIdea] = useState(false);
+  const [selectedIdea, setSelectedIdea] = useState(null);
   const location = useLocation();
 
   useEffect(() => {
@@ -65,6 +69,40 @@ const ExplorerPage = () => {
       setError('Search failed');
     }
     setIsSearching(false);
+  };
+
+  const handleIdeaClick = async (ideaText) => {
+    if (!selectedSession || isSearchingIdea) return;
+    
+    // Toggle selection if clicking the same idea
+    if (selectedIdea === ideaText) {
+      setSelectedIdea(null);
+      setHighlights([]);
+      return;
+    }
+    
+    console.log('\n=== Idea Click Debug ===');
+    console.log('Clicked idea:', ideaText);
+    console.log('Session ID:', selectedSession._id);
+    
+    setIsSearchingIdea(true);
+    setSelectedIdea(ideaText);
+    try {
+      const matches = await searchWithinSession(selectedSession._id, ideaText);
+      console.log('Received matches:', matches);
+      console.log('Match details:', matches.map(m => ({
+        start: m.startOffset,
+        end: m.endOffset,
+        text: m.text.substring(0, 50) + '...',
+        similarity: m.similarity
+      })));
+      setHighlights(matches);
+    } catch (error) {
+      console.error('Error searching for idea matches:', error);
+      setSelectedIdea(null);
+    } finally {
+      setIsSearchingIdea(false);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -177,7 +215,8 @@ const ExplorerPage = () => {
               <div style={{ 
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'flex-start'
+                alignItems: 'flex-start',
+                marginBottom: 'var(--spacing-md)'
               }}>
                 <div style={{ 
                   fontSize: 'var(--font-size-large)',
@@ -195,6 +234,50 @@ const ExplorerPage = () => {
                   )}
                 </div>
               </div>
+              
+              {/* Atomic Ideas Tags */}
+              {selectedSession.atomicIdeas && (
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 'var(--spacing-xs)',
+                  marginTop: 'var(--spacing-sm)'
+                }}>
+                  {Array.from(new Set(
+                    selectedSession.atomicIdeas
+                      .split('\n')
+                      .filter(line => line.includes(':'))
+                      .map(line => line.split(':')[0].replace(/^\d+\.\s*/, '').trim())
+                  )).map((tag, index) => (
+                    <div
+                      key={index}
+                      onClick={() => handleIdeaClick(tag)}
+                      style={{
+                        backgroundColor: selectedIdea === tag ? 
+                          'var(--color-primary)' : 
+                          'var(--color-bg-alt)',
+                        color: selectedIdea === tag ?
+                          'var(--color-bg)' :
+                          'var(--color-primary)',
+                        padding: '2px var(--spacing-sm)',
+                        borderRadius: '100px',
+                        fontSize: '0.7rem',
+                        fontFamily: 'var(--font-mono)',
+                        whiteSpace: 'nowrap',
+                        opacity: isSearchingIdea ? 0.5 : 0.8,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        border: `1px solid var(--color-primary)`,
+                        boxShadow: selectedIdea === tag ?
+                          '0 0 4px var(--color-primary)' :
+                          'none'
+                      }}
+                    >
+                      {tag}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Content Panels Container */}
@@ -226,7 +309,10 @@ const ExplorerPage = () => {
                   padding: 'var(--spacing-xl)',
                   fontSize: 'var(--font-size-base)'
                 }}>
-                  {selectedSession.text || 'No content available'}
+                  <HighlightedText 
+                    text={selectedSession.text || 'No content available'} 
+                    highlights={highlights}
+                  />
                 </div>
               </div>
 
@@ -265,38 +351,6 @@ const ExplorerPage = () => {
                   }}>
                     Atomic Ideas
                   </div>
-                  {/* Tags Section */}
-                  {selectedSession.atomicIdeas && (
-                    <div style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 'var(--spacing-sm)',
-                      marginBottom: 'var(--spacing-md)',
-                      padding: 'var(--spacing-sm)'
-                    }}>
-                      {Array.from(new Set(
-                        selectedSession.atomicIdeas
-                          .split('\n')
-                          .filter(line => line.includes(':'))
-                          .map(line => line.split(':')[0].replace(/^\d+\.\s*/, '').trim())
-                      )).map((tag, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            backgroundColor: 'var(--color-primary)',
-                            color: 'var(--color-bg)',
-                            padding: 'var(--spacing-xs) var(--spacing-sm)',
-                            borderRadius: '100px',
-                            fontSize: 'var(--font-size-small)',
-                            fontFamily: 'var(--font-mono)',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          {tag}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 <div className="card mono" style={{
                   whiteSpace: 'pre-wrap',
