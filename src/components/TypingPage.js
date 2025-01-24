@@ -97,6 +97,19 @@ function TypingPage() {
                     className="editor-input"
                 />
                 <div className="gradient-overlay"></div>
+                
+                {/* Character Counter */}
+                <div style={{
+                    position: 'fixed',
+                    bottom: 'var(--spacing-md)',
+                    left: 'var(--spacing-md)',
+                    fontSize: 'var(--font-size-small)',
+                    color: 'var(--color-text-light)',
+                    fontFamily: 'var(--font-mono)',
+                    zIndex: 10
+                }}>
+                    {input.length} characters
+                </div>
             </div>
         </div>
     );

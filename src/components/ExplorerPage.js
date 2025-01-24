@@ -77,7 +77,7 @@ const ExplorerPage = () => {
   return (
     <div style={{ 
       display: 'grid',
-      gridTemplateColumns: 'var(--sidebar-width) 1fr',
+      gridTemplateColumns: 'var(--sidebar-width) 1fr 1fr',
       height: `calc(100vh - var(--navbar-height))`,
       backgroundColor: 'var(--color-bg)',
       position: 'relative'
@@ -159,24 +159,35 @@ const ExplorerPage = () => {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content Container */}
       <div style={{ 
-        padding: 'var(--spacing-xl)',
+        gridColumn: '2 / span 2',
         display: 'flex',
-        justifyContent: 'center',
-        height: '100%',
-        backgroundColor: 'var(--color-bg)',
-        overflowY: 'auto'
+        flexDirection: 'column',
+        height: '100%'
       }}>
-        <div style={{
-          width: 'var(--content-width)',
-          maxWidth: 'var(--content-width)'
-        }}>
-          {selectedSession ? (
-            <div>
-              <div className="card" style={{ marginBottom: 'var(--spacing-md)' }}>
-                <div className="text-light">
-                  Created: {formatDate(selectedSession.createdAt)}
+        {selectedSession ? (
+          <>
+            {/* Single Header */}
+            <div className="card" style={{ 
+              margin: 'var(--spacing-xl) var(--spacing-xl) 0',
+              padding: 'var(--spacing-md)',
+              borderBottom: '1px solid var(--color-border)'
+            }}>
+              <div style={{ 
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start'
+              }}>
+                <div style={{ 
+                  fontSize: 'var(--font-size-large)',
+                  fontWeight: 'bold',
+                  flex: 1
+                }}>
+                  {selectedSession.title || 'Untitled Note'}
+                </div>
+                <div className="text-light" style={{ textAlign: 'right' }}>
+                  {formatDate(selectedSession.createdAt)}
                   {selectedSession.similarity && (
                     <div style={{ color: 'var(--color-primary)', marginTop: 'var(--spacing-xs)' }}>
                       Similarity Score: {(parseFloat(selectedSession.similarity) * 100).toFixed(1)}%
@@ -184,35 +195,150 @@ const ExplorerPage = () => {
                   )}
                 </div>
               </div>
-              <div className="card mono" style={{
-                whiteSpace: 'pre-wrap',
-                lineHeight: 'var(--line-height)',
+            </div>
+
+            {/* Content Panels Container */}
+            <div style={{ 
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              flex: 1,
+              overflow: 'hidden'
+            }}>
+              {/* Raw Text Panel */}
+              <div style={{ 
                 padding: 'var(--spacing-xl)',
-                fontSize: 'var(--font-size-base)'
+                height: '100%',
+                backgroundColor: 'var(--color-bg)',
+                overflowY: 'auto',
+                borderRight: '1px solid var(--color-border)'
               }}>
-                {(() => {
-                  console.log('Displaying session:', {
-                    id: selectedSession._id,
-                    titleLength: selectedSession.title?.length,
-                    summaryLength: selectedSession.summary?.length,
-                    summary: selectedSession.summary
-                  });
-                  return selectedSession.summary || 'No summary available';
-                })()}
+                <div className="card" style={{ marginBottom: 'var(--spacing-md)' }}>
+                  <div style={{ 
+                    fontSize: 'var(--font-size-base)',
+                    color: 'var(--color-text-light)'
+                  }}>
+                    Raw Text
+                  </div>
+                </div>
+                <div className="card mono" style={{
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 'var(--line-height)',
+                  padding: 'var(--spacing-xl)',
+                  fontSize: 'var(--font-size-base)'
+                }}>
+                  {selectedSession.text || 'No content available'}
+                </div>
+              </div>
+
+              {/* Summary Panel */}
+              <div style={{ 
+                padding: 'var(--spacing-xl)',
+                height: '100%',
+                backgroundColor: 'var(--color-bg)',
+                overflowY: 'auto'
+              }}>
+                {/* Summary Section */}
+                <div className="card" style={{ marginBottom: 'var(--spacing-md)' }}>
+                  <div style={{ 
+                    fontSize: 'var(--font-size-base)',
+                    color: 'var(--color-text-light)'
+                  }}>
+                    Summary
+                  </div>
+                </div>
+                <div className="card mono" style={{
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 'var(--line-height)',
+                  padding: 'var(--spacing-xl)',
+                  fontSize: 'var(--font-size-base)',
+                  marginBottom: 'var(--spacing-xl)'
+                }}>
+                  {selectedSession.summary || 'No summary available'}
+                </div>
+
+                {/* Atomic Ideas Section */}
+                <div className="card" style={{ marginBottom: 'var(--spacing-md)' }}>
+                  <div style={{ 
+                    fontSize: 'var(--font-size-base)',
+                    color: 'var(--color-text-light)',
+                    marginBottom: 'var(--spacing-md)'
+                  }}>
+                    Atomic Ideas
+                  </div>
+                  {/* Tags Section */}
+                  {selectedSession.atomicIdeas && (
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 'var(--spacing-sm)',
+                      marginBottom: 'var(--spacing-md)',
+                      padding: 'var(--spacing-sm)'
+                    }}>
+                      {Array.from(new Set(
+                        selectedSession.atomicIdeas
+                          .split('\n')
+                          .filter(line => line.includes(':'))
+                          .map(line => line.split(':')[0].replace(/^\d+\.\s*/, '').trim())
+                      )).map((tag, index) => (
+                        <div
+                          key={index}
+                          style={{
+                            backgroundColor: 'var(--color-primary)',
+                            color: 'var(--color-bg)',
+                            padding: 'var(--spacing-xs) var(--spacing-sm)',
+                            borderRadius: '100px',
+                            fontSize: 'var(--font-size-small)',
+                            fontFamily: 'var(--font-mono)',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {tag}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="card mono" style={{
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 'var(--line-height)',
+                  padding: 'var(--spacing-xl)',
+                  fontSize: 'var(--font-size-base)'
+                }}>
+                  {selectedSession.atomicIdeas ? (
+                    selectedSession.atomicIdeas.split('\n').map((line, index) => {
+                      if (!line.trim()) return null;
+                      const [number, ...rest] = line.split('.');
+                      const [category, content] = rest.join('.').split(':');
+                      if (!content) return line;
+                      
+                      return (
+                        <div key={index} style={{ marginBottom: 'var(--spacing-md)' }}>
+                          <span style={{ color: 'var(--color-text-light)' }}>{number}. </span>
+                          <span style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>
+                            {category.trim()}:
+                          </span>
+                          <span>{content}</span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    'No atomic ideas available'
+                  )}
+                </div>
               </div>
             </div>
-          ) : (
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
-              alignItems: 'center', 
-              height: '100%',
-              color: 'var(--color-text-light)'
-            }}>
-              Select a note to view its contents
-            </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: '100%',
+            color: 'var(--color-text-light)'
+          }}>
+            Select a note to view its contents
+          </div>
+        )}
       </div>
     </div>
   );
