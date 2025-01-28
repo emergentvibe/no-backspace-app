@@ -50,7 +50,7 @@ function TypingPage() {
     // Exponential Moving Average weights
     const EMA_WEIGHTS = {
         short: 0.3,    // 10-second EMA: more responsive
-        medium: 0.1,   // 30-second EMA: balanced
+        medium: 0.09,   // 30-second EMA: balanced
         long: 0.02     // 2-minute EMA: stable
     };
 
@@ -58,99 +58,91 @@ function TypingPage() {
         constructor(windowSize, emaWeight) {
             this.windowSize = windowSize;
             this.emaWeight = emaWeight;
+            this.bucketSize = 1000;  // 1-second buckets
+            this.bucketValues = new Map();  // bucket -> value
             this.samples = [];
-            this.emaHistory = [];  // Store history of EMA values
-            this.startTime = Date.now();
+            this.startTime = Math.floor(Date.now() / this.bucketSize) * this.bucketSize;
+            this.debugName = windowSize === 10000 ? "10s" : 
+                           windowSize === 240000 ? "4m" : "8m";
+            console.log(`[${this.debugName}] Initialized at bucket ${this.startTime}`);
         }
 
         addSample(speed, time) {
-            // Add new sample
+            // Add sample
             this.samples.push({ speed, time });
             
-            // Calculate new EMA
-            let newEma;
-            const lastEma = this.emaHistory.length > 0 ? this.emaHistory[this.emaHistory.length - 1].value : 0;
+            // Get the current bucket
+            const bucket = Math.floor(time / this.bucketSize) * this.bucketSize;
             
-            if (lastEma === 0) {
-                newEma = speed;
-            } else {
-                // If there was a gap in typing (no samples for > 2 seconds),
-                // decay the EMA towards zero based on the gap duration
-                const timeSinceLastUpdate = time - (this.emaHistory.length > 0 ? this.emaHistory[this.emaHistory.length - 1].time : this.startTime);
-                if (timeSinceLastUpdate > 2000) {
-                    const decayFactor = Math.exp(-timeSinceLastUpdate / 10000);
-                    newEma = (speed * this.emaWeight) + (lastEma * decayFactor * (1 - this.emaWeight));
+            // Only calculate once per bucket
+            if (!this.bucketValues.has(bucket)) {
+                // Calculate average speed for this bucket
+                const bucketSamples = this.samples.filter(s => 
+                    Math.floor(s.time / this.bucketSize) * this.bucketSize === bucket
+                );
+                const bucketSpeed = bucketSamples.length > 0
+                    ? bucketSamples.reduce((sum, s) => sum + s.speed, 0) / bucketSamples.length
+                    : 0;
+
+                // Get the previous bucket's value
+                const prevBucket = bucket - this.bucketSize;
+                const prevValue = this.bucketValues.get(prevBucket) || 0;
+
+                // Calculate new EMA
+                let newValue;
+                if (prevValue === 0) {
+                    newValue = bucketSpeed;
                 } else {
-                    newEma = (speed * this.emaWeight) + (lastEma * (1 - this.emaWeight));
+                    // Check for gaps
+                    const gapBuckets = Math.floor((bucket - prevBucket) / this.bucketSize) - 1;
+                    if (gapBuckets > 0) {
+                        // Decay during gap
+                        const decayFactor = Math.exp(-gapBuckets / 10);
+                        prevValue *= decayFactor;
+                    }
+                    newValue = (bucketSpeed * this.emaWeight) + (prevValue * (1 - this.emaWeight));
                 }
+
+                console.log(`[${this.debugName}] Bucket ${bucket}: speed=${bucketSpeed.toFixed(2)}, ema=${newValue.toFixed(2)}`);
+                this.bucketValues.set(bucket, newValue);
             }
 
-            // Add to history
-            this.emaHistory.push({ value: newEma, time });
-
-            // Cleanup old samples and history
-            const cutoffTime = time - DISPLAY_WINDOW;
+            // Cleanup old data
+            const cutoffTime = bucket - DISPLAY_WINDOW;
             this.samples = this.samples.filter(s => s.time > cutoffTime);
-            this.emaHistory = this.emaHistory.filter(h => h.time > cutoffTime);
+            
+            // Cleanup old buckets
+            for (const [oldBucket] of this.bucketValues) {
+                if (oldBucket < cutoffTime) {
+                    this.bucketValues.delete(oldBucket);
+                }
+            }
         }
 
         getSmoothedSpeed(targetTime) {
-            // Don't try to predict future values
-            if (targetTime > Date.now()) {
-                return 0;
-            }
-
-            // If requesting time before tracking started, return 0
-            if (targetTime < this.startTime) {
-                return 0;
-            }
-
-            // If no history, return 0
-            if (this.emaHistory.length === 0) {
-                return 0;
-            }
-
-            // Find the closest historical EMA value
-            const lastHistoryTime = this.emaHistory[this.emaHistory.length - 1].time;
-            if (targetTime >= lastHistoryTime) {
-                return this.emaHistory[this.emaHistory.length - 1].value;
-            }
-
-            // Binary search for the closest historical value
-            let left = 0;
-            let right = this.emaHistory.length - 1;
+            const bucket = Math.floor(targetTime / this.bucketSize) * this.bucketSize;
             
-            while (left < right - 1) {
-                const mid = Math.floor((left + right) / 2);
-                const midTime = this.emaHistory[mid].time;
-                
-                if (midTime === targetTime) {
-                    return this.emaHistory[mid].value;
-                } else if (midTime < targetTime) {
-                    left = mid;
-                } else {
-                    right = mid;
-                }
-            }
+            // Don't predict future
+            if (bucket > Date.now()) return 0;
+            
+            // Don't show values before start
+            if (bucket < this.startTime) return 0;
 
-            // Interpolate between two closest points
-            const leftPoint = this.emaHistory[left];
-            const rightPoint = this.emaHistory[right];
-            const ratio = (targetTime - leftPoint.time) / (rightPoint.time - leftPoint.time);
-            return leftPoint.value + (rightPoint.value - leftPoint.value) * ratio;
+            const value = this.bucketValues.get(bucket) || 0;
+            return value;
         }
 
         getPeakSpeed() {
-            if (this.emaHistory.length === 0) return 0;
-            return Math.max(...this.emaHistory.map(h => h.value));
+            if (this.bucketValues.size === 0) return 0;
+            return Math.max(...this.bucketValues.values());
         }
     }
 
     // Initialize trackers with EMA weights
     const speedTrackers = {
-        short: useRef(new SpeedTracker(DISPLAY_WINDOW, 0.3)),    // More responsive
-        medium: useRef(new SpeedTracker(DISPLAY_WINDOW, 0.1)),   // Balanced
-        long: useRef(new SpeedTracker(DISPLAY_WINDOW, 0.02))     // Stable
+        short: useRef(new SpeedTracker(10 * 1000, 0.3)),     // 10 second window
+        medium: useRef(new SpeedTracker(4 * 60 * 1000, 0.1)), // 4 minute window
+        long: useRef(new SpeedTracker(8 * 60 * 1000, 0.02))   // 8 minute window
     };
 
     // Optimization: Memoize speed calculations
@@ -321,7 +313,7 @@ function TypingPage() {
         const canvas = graphCanvasRef.current;
         if (!canvas) return;
 
-        const now = Date.now();
+        const now = performance.now();
         const lastDrawTime = canvas.lastDrawTime || 0;
 
         // Throttle frame rate
@@ -365,9 +357,21 @@ function TypingPage() {
         }
         ctx.stroke();
 
+        // Add grid labels
+        ctx.fillStyle = '#666666';
+        ctx.font = '10px var(--font-mono)';
+        for (let i = 0; i <= 10; i++) {
+            const x = width - (i * width / 10);
+            ctx.fillText(i === 0 ? 'now' : `-${i}m`, x - 10, height + 15);
+        }
+        for (let wpm = 0; wpm <= MAX_WPM; wpm += 50) {
+            const y = height * (1 - wpm / MAX_WPM);
+            ctx.fillText(`${wpm}`, 5, y - 2);
+        }
+
         // Draw speed lines
         if (typingSpeed.length > 1) {
-            const points = Math.min(width, 300);  // Reduced number of points
+            const currentBucket = Math.floor(Date.now() / 1000) * 1000;
 
             Object.entries(speedTrackers).forEach(([key, tracker], index) => {
                 const color = {
@@ -382,28 +386,52 @@ function TypingPage() {
                 ctx.lineWidth = 2;
                 ctx.globalAlpha = alpha;
 
+                let lastX = null;
                 let lastY = null;
-                for (let i = 0; i < points; i++) {
-                    const timeAtPoint = now - (DISPLAY_WINDOW * (1 - i/points));
+
+                // Draw points at 1-second intervals
+                for (let i = 0; i <= DISPLAY_WINDOW; i += 1000) {
+                    const timeAtPoint = currentBucket - (DISPLAY_WINDOW - i);
                     const smoothedSpeed = tracker.current.getSmoothedSpeed(timeAtPoint);
-                    const x = (i / points) * width;
+                    const x = (i / DISPLAY_WINDOW) * width;
                     const y = height * (1 - Math.min(smoothedSpeed, MAX_WPM) / MAX_WPM);
 
-                    // Only draw if we have a valid speed
-                    if (smoothedSpeed === 0 && lastY === null) {
-                        continue;
-                    }
-
-                    if (lastY === null) {
+                    if (lastX === null) {
                         ctx.moveTo(x, y);
                     } else {
-                        ctx.lineTo(x, y);
+                        // Draw step pattern
+                        ctx.lineTo(lastX, lastY);  // Horizontal line
+                        ctx.lineTo(x, lastY);      // Horizontal line to new x
+                        ctx.lineTo(x, y);          // Vertical line to new y
                     }
+                    lastX = x;
                     lastY = y;
                 }
                 ctx.stroke();
             });
             ctx.globalAlpha = 1;
+
+            // Add legend
+            const legend = [
+                { label: '10s', color: '#4CAF50' },
+                { label: '4m', color: '#2196F3' },
+                { label: '8m', color: '#9C27B0' }
+            ];
+
+            legend.forEach((item, i) => {
+                const x = width - 50;
+                const y = 15 + i * 15;
+                
+                ctx.strokeStyle = item.color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x - 15, y - 4);
+                ctx.lineTo(x, y - 4);
+                ctx.stroke();
+                
+                ctx.fillStyle = '#666666';
+                ctx.fillText(item.label, x + 5, y);
+            });
         }
 
         animationFrameRef.current = requestAnimationFrame(drawGraph);
