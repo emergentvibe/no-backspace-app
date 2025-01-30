@@ -185,6 +185,9 @@ const ExplorerPage = () => {
                   <div className="mono" style={{ fontWeight: 'bold', marginBottom: 'var(--spacing-xs)' }}>
                     {session.title || 'Untitled Note'}
                   </div>
+                  <div className="text-light" style={{ fontSize: 'var(--font-size-small)' }}>
+                    by @{session.userName || 'anonymous'}
+                  </div>
                   {session.similarity && (
                     <div style={{ fontSize: 'var(--font-size-small)', color: 'var(--color-primary)', marginTop: 'var(--spacing-xs)' }}>
                       Similarity: {(parseFloat(session.similarity) * 100).toFixed(1)}%
@@ -206,7 +209,7 @@ const ExplorerPage = () => {
       }}>
         {selectedSession ? (
           <>
-            {/* Single Header */}
+            {/* Header */}
             <div className="card" style={{ 
               margin: 'var(--spacing-xl) var(--spacing-xl) 0',
               padding: 'var(--spacing-md)',
@@ -218,64 +221,65 @@ const ExplorerPage = () => {
                 alignItems: 'flex-start',
                 marginBottom: 'var(--spacing-md)'
               }}>
-                <div style={{ 
-                  fontSize: 'var(--font-size-large)',
-                  fontWeight: 'bold',
-                  flex: 1
-                }}>
-                  {selectedSession.title || 'Untitled Note'}
+                <div>
+                  <div style={{ 
+                    fontSize: 'var(--font-size-large)',
+                    fontWeight: 'bold',
+                    marginBottom: 'var(--spacing-xs)'
+                  }}>
+                    {selectedSession.title || 'Untitled Note'}
+                  </div>
+                  <div className="text-light" style={{ fontSize: 'var(--font-size-small)' }}>
+                    by @{selectedSession.userName || 'anonymous'} • {formatDate(selectedSession.createdAt)}
+                  </div>
                 </div>
-                <div className="text-light" style={{ textAlign: 'right' }}>
-                  {formatDate(selectedSession.createdAt)}
-                  {selectedSession.similarity && (
-                    <div style={{ color: 'var(--color-primary)', marginTop: 'var(--spacing-xs)' }}>
-                      Similarity Score: {(parseFloat(selectedSession.similarity) * 100).toFixed(1)}%
-                    </div>
-                  )}
-                </div>
+                {selectedSession.similarity && (
+                  <div style={{ color: 'var(--color-primary)' }}>
+                    Similarity Score: {(parseFloat(selectedSession.similarity) * 100).toFixed(1)}%
+                  </div>
+                )}
               </div>
-              
+
               {/* Atomic Ideas Tags */}
-              {selectedSession.atomicIdeas && (
+              {selectedSession?.atomicIdeas && (
                 <div style={{
                   display: 'flex',
                   flexWrap: 'wrap',
                   gap: 'var(--spacing-xs)',
                   marginTop: 'var(--spacing-sm)'
                 }}>
-                  {Array.from(new Set(
-                    selectedSession.atomicIdeas
-                      .split('\n')
-                      .filter(line => line.includes(':'))
-                      .map(line => line.split(':')[0].replace(/^\d+\.\s*/, '').trim())
-                  )).map((tag, index) => (
-                    <div
-                      key={index}
-                      onClick={() => handleIdeaClick(tag)}
-                      style={{
-                        backgroundColor: selectedIdea === tag ? 
-                          'var(--color-primary)' : 
-                          'var(--color-bg-alt)',
-                        color: selectedIdea === tag ?
-                          'var(--color-bg)' :
-                          'var(--color-primary)',
-                        padding: '2px var(--spacing-sm)',
-                        borderRadius: '100px',
-                        fontSize: '0.7rem',
-                        fontFamily: 'var(--font-mono)',
-                        whiteSpace: 'nowrap',
-                        opacity: isSearchingIdea ? 0.5 : 0.8,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        border: `1px solid var(--color-primary)`,
-                        boxShadow: selectedIdea === tag ?
-                          '0 0 4px var(--color-primary)' :
-                          'none'
-                      }}
-                    >
-                      {tag}
-                    </div>
-                  ))}
+                  {selectedSession.atomicIdeas
+                    .split(':::')
+                    .map(idea => idea.trim())
+                    .filter(idea => idea.length > 0)
+                    .map((idea, index) => (
+                      <div
+                        key={index}
+                        onClick={() => handleIdeaClick(idea)}
+                        style={{
+                          backgroundColor: selectedIdea === idea ? 
+                            'var(--color-primary)' : 
+                            'var(--color-bg-alt)',
+                          color: selectedIdea === idea ?
+                            'var(--color-bg)' :
+                            'var(--color-primary)',
+                          padding: '2px var(--spacing-sm)',
+                          borderRadius: '100px',
+                          fontSize: '0.7rem',
+                          fontFamily: 'var(--font-mono)',
+                          whiteSpace: 'nowrap',
+                          opacity: isSearchingIdea ? 0.5 : 0.8,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          border: `1px solid var(--color-primary)`,
+                          boxShadow: selectedIdea === idea ?
+                            '0 0 4px var(--color-primary)' :
+                            'none'
+                        }}
+                      >
+                        {idea}
+                      </div>
+                    ))}
                 </div>
               )}
             </div>
@@ -283,39 +287,10 @@ const ExplorerPage = () => {
             {/* Content Panels Container */}
             <div style={{ 
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: '1fr',
               flex: 1,
               overflow: 'hidden'
             }}>
-              {/* Raw Text Panel */}
-              <div style={{ 
-                padding: 'var(--spacing-xl)',
-                height: '100%',
-                backgroundColor: 'var(--color-bg)',
-                overflowY: 'auto',
-                borderRight: '1px solid var(--color-border)'
-              }}>
-                <div className="card" style={{ marginBottom: 'var(--spacing-md)' }}>
-                  <div style={{ 
-                    fontSize: 'var(--font-size-base)',
-                    color: 'var(--color-text-light)'
-                  }}>
-                    Raw Text
-                  </div>
-                </div>
-                <div className="card mono" style={{
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 'var(--line-height)',
-                  padding: 'var(--spacing-xl)',
-                  fontSize: 'var(--font-size-base)'
-                }}>
-                  <HighlightedText 
-                    text={selectedSession.text || 'No content available'} 
-                    highlights={highlights}
-                  />
-                </div>
-              </div>
-
               {/* Summary Panel */}
               <div style={{ 
                 padding: 'var(--spacing-xl)',
@@ -359,22 +334,15 @@ const ExplorerPage = () => {
                   fontSize: 'var(--font-size-base)'
                 }}>
                   {selectedSession.atomicIdeas ? (
-                    selectedSession.atomicIdeas.split('\n').map((line, index) => {
-                      if (!line.trim()) return null;
-                      const [number, ...rest] = line.split('.');
-                      const [category, content] = rest.join('.').split(':');
-                      if (!content) return line;
-                      
-                      return (
+                    selectedSession.atomicIdeas
+                      .split(':::')
+                      .map(idea => idea.trim())
+                      .filter(idea => idea.length > 0)
+                      .map((idea, index) => (
                         <div key={index} style={{ marginBottom: 'var(--spacing-md)' }}>
-                          <span style={{ color: 'var(--color-text-light)' }}>{number}. </span>
-                          <span style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>
-                            {category.trim()}:
-                          </span>
-                          <span>{content}</span>
+                          {idea}
                         </div>
-                      );
-                    })
+                      ))
                   ) : (
                     'No atomic ideas available'
                   )}

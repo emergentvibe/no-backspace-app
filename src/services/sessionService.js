@@ -2,14 +2,14 @@
 
 const API_URL = 'http://localhost:4000'; // URL of your Express server
 
-export async function createSession(text, isClosed = false) {
+export async function createSession(text, isClosed = false, userName = 'Anonymous') {
   try {
     const response = await fetch(`${API_URL}/sessions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text, isClosed }),
+      body: JSON.stringify({ text, isClosed, userName }),
     });
     
     if (!response.ok) {
@@ -23,7 +23,7 @@ export async function createSession(text, isClosed = false) {
   }
 }
 
-export const updateSession = async (sessionId, text, shouldClose = false) => {
+export async function updateSession(sessionId, text, shouldClose = false, userName = 'Anonymous') {
   try {
     console.log('🔄 Checking session:', sessionId);
     
@@ -37,7 +37,7 @@ export const updateSession = async (sessionId, text, shouldClose = false) => {
     // If session is already closed, create a new one instead
     if (status.isClosed) {
       console.log('⚠️ Session already closed, creating new one');
-      return createSession(text, shouldClose);
+      return createSession(text, shouldClose, userName);
     }
     
     console.log('📝 Updating session:', { sessionId, textLength: text.length, shouldClose });
@@ -46,34 +46,22 @@ export const updateSession = async (sessionId, text, shouldClose = false) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text, 
+        userName,
         isClosed: shouldClose,
-        shouldReprocess: true  // Always reprocess to ensure fresh summaries
+        shouldReprocess: true
       }),
     });
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Update failed:', errorText);
-      if (errorText.includes('closed')) {
-        console.log('⚠️ Session was closed, creating new one');
-        return createSession(text, shouldClose);
-      }
       throw new Error('Failed to update session');
     }
     
-    const data = await response.json();
-    console.log('✅ Update successful:', data.session._id);
-    return data;
+    return response.json();
   } catch (error) {
     console.error('Error updating session:', error);
-    // If any error occurs during update, try to create a new session
-    if (error.message.includes('Failed to update') || error.message.includes('Failed to check')) {
-      console.log('⚠️ Update failed, creating new session');
-      return createSession(text, shouldClose);
-    }
     throw error;
   }
-};
+}
 
 export const closeSession = async (sessionId) => {
   try {

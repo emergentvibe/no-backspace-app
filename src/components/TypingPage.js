@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createSession, checkSessionStatus, updateSession } from '../services/sessionService';
+import { createSession, checkSessionStatus, updateSession, closeSession } from '../services/sessionService';
 import { useNavigate } from 'react-router-dom';
 import './TypingPage.css';
 import '../globalStyles.css';
@@ -57,7 +57,7 @@ class SpeedTracker {
     }
 }
 
-function TypingPage() {
+const TypingPage = ({ userName }) => {
     // Add currentSessionId to track active session
     const [input, setInput] = useState(() => localStorage.getItem('currentText') || '');
     const [currentSessionId, setCurrentSessionId] = useState(() => localStorage.getItem('currentSessionId') || null);
@@ -362,11 +362,11 @@ function TypingPage() {
             
             if (currentSessionId) {
                 // Update existing session
-                result = await updateSession(currentSessionId, text, shouldClose);
+                result = await updateSession(currentSessionId, text, shouldClose, userName);
                 console.log('📝 Updating session:', currentSessionId);
             } else {
                 // Create new session
-                result = await createSession(text, shouldClose);
+                result = await createSession(text, shouldClose, userName);
                 console.log('✨ Creating new session');
                 if (!shouldClose) {
                     // Store session ID for future updates
@@ -419,25 +419,25 @@ function TypingPage() {
                 if (status.isClosed) {
                     // Session is closed, create new one
                     console.log('⚠️ Session closed, creating new one');
-                    const result = await createSession(text, shouldClose);
+                    const result = await createSession(text, shouldClose, userName);
                     setCurrentSessionId(result.session._id);
                     localStorage.setItem('currentSessionId', result.session._id);
                     return result;
                 } else {
                     // Session is open, update it
-                    return await updateSession(currentSessionId, text, shouldClose);
+                    return await updateSession(currentSessionId, text, shouldClose, userName);
                 }
             } catch (error) {
                 // If any error occurs, create new session
                 console.log('⚠️ Error checking session, creating new one');
-                const result = await createSession(text, shouldClose);
+                const result = await createSession(text, shouldClose, userName);
                 setCurrentSessionId(result.session._id);
                 localStorage.setItem('currentSessionId', result.session._id);
                 return result;
             }
         } else {
             // No current session, create new one
-            const result = await createSession(text, shouldClose);
+            const result = await createSession(text, shouldClose, userName);
             if (!shouldClose) {
                 setCurrentSessionId(result.session._id);
                 localStorage.setItem('currentSessionId', result.session._id);
@@ -452,28 +452,48 @@ function TypingPage() {
         
         try {
             isSaving.current = true;
-            setSavingStatus('Saving...');
+            setSavingStatus('Processing note...');
+            
+            console.log('Saving with userName:', userName);
             
             let result;
             if (currentSessionId) {
-                // Try to update existing session
-                console.log('📝 Attempting to update session:', currentSessionId);
-                result = await updateSession(currentSessionId, textToSave, false);
+                // Close and process the current session
+                console.log('🔒 Processing current session:', currentSessionId);
+                result = await closeSession(currentSessionId);
             } else {
-                // Create new session
-                console.log('✨ Creating new session');
-                result = await createSession(textToSave, false);
-            }
-
-            // Always update session ID from result
-            if (result?.session?._id) {
-                console.log('📌 Setting session ID:', result.session._id);
-                setCurrentSessionId(result.session._id);
-                localStorage.setItem('currentSessionId', result.session._id);
+                // Create a new closed session for processing
+                console.log('✨ Creating new processed session');
+                const response = await createSession(textToSave, true, userName);
+                result = response.session;
             }
             
-            setSavingStatus('Saved!');
-            setTimeout(() => setSavingStatus(''), 2000);
+            // Clear current session state
+            setCurrentSessionId(null);
+            localStorage.removeItem('currentSessionId');
+            
+            // Clear input
+            setInput('');
+            currentTextRef.current = '';
+            localStorage.removeItem('currentText');
+            
+            // Poll for processing status
+            if (result?._id) {
+                const pollInterval = setInterval(async () => {
+                    const { status } = await checkSessionStatus(result._id);
+                    if (status.hasTitle && status.hasSummary) {
+                        setSavingStatus('Generated title and summary...');
+                    }
+                    if (status.hasAtomicIdeas) {
+                        setSavingStatus('Extracted ideas...');
+                    }
+                    if (!status.isProcessing) {
+                        clearInterval(pollInterval);
+                        setSavingStatus('Note saved!');
+                        setTimeout(() => setSavingStatus(''), 2000);
+                    }
+                }, 1000);
+            }
         } catch (error) {
             console.error('Error:', error);
             setSavingStatus('Error saving');
@@ -496,15 +516,17 @@ function TypingPage() {
             isSaving.current = true;
             setSavingStatus('Saving and closing session...');
             
+            console.log('Creating closed session with userName:', userName);
+            
             let result;
             if (currentSessionId) {
                 // Close existing session
                 console.log('🔒 Closing session:', currentSessionId);
-                result = await updateSession(currentSessionId, textToSave, true);
+                result = await updateSession(currentSessionId, textToSave, true, userName);
             } else {
                 // Create new closed session
                 console.log('✨ Creating closed session');
-                result = await createSession(textToSave, true);
+                result = await createSession(textToSave, true, userName);
             }
             
             // Wait for processing
@@ -594,6 +616,10 @@ function TypingPage() {
             }
         };
     }, []);
+
+    useEffect(() => {
+        console.log('TypingPage mounted with userName:', userName);
+    }, [userName]);
 
     return (
         <div className="typing-page">

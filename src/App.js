@@ -1,14 +1,21 @@
 // App.js
 
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import TypingPage from './components/TypingPage';
 import ExplorerPage from './components/ExplorerPage';
 import ComposerPage from './components/ComposerPage';
 import SettingsPage from './components/SettingsPage';
+import NamePrompt from './components/NamePrompt';
 import './globalStyles.css'; // Import the global CSS file
 
 function App() {
+    const [userName, setUserName] = useState(null);
+
+    if (!userName) {
+        return <NamePrompt onSubmit={setUserName} />;
+    }
+
     return (
         <Router>
             <div style={{ 
@@ -35,8 +42,8 @@ function App() {
                         padding: '0 var(--spacing-xl)'
                     }}>
                         <div>
-                            <h1>no_backspace_</h1>
-                            <h2>the minimalist note taking app</h2>
+                            <h1>no_backspace_ @yincubator/{userName}</h1>
+                            <h2>cooperative sensemaking made easy</h2>
                         </div>
                         <NavBar />
                     </div>
@@ -46,8 +53,8 @@ function App() {
                     flex: 1
                 }}>
                     <Routes>
-                        <Route path="/" exact element={<TypingPage />} />
-                        <Route path="/explorer" element={<ExplorerPage />} />
+                        <Route path="/" element={<TypingPage userName={userName} />} />
+                        <Route path="/explorer" element={<ExplorerPage userName={userName} />} />
                         <Route path="/composer" element={<ComposerPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                     </Routes>
