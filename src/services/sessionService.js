@@ -136,3 +136,24 @@ export async function checkSessionStatus(sessionId) {
     throw error;
   }
 }
+
+export const sensemakeSessions = async (sessionIds) => {
+  try {
+    const response = await fetch(`${API_URL}/sensemake`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionIds })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to start sensemaking process');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error in sensemaking:', error);
+    throw error;
+  }
+};

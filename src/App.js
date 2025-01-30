@@ -6,6 +6,7 @@ import TypingPage from './components/TypingPage';
 import ExplorerPage from './components/ExplorerPage';
 import ComposerPage from './components/ComposerPage';
 import SettingsPage from './components/SettingsPage';
+import SensemakingPage from './components/SensemakingPage';
 import NamePrompt from './components/NamePrompt';
 import './globalStyles.css'; // Import the global CSS file
 
@@ -57,6 +58,7 @@ function App() {
                         <Route path="/explorer" element={<ExplorerPage userName={userName} />} />
                         <Route path="/composer" element={<ComposerPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="/sensemaking" element={<SensemakingPage />} />
                     </Routes>
                 </main>
             </div>
@@ -79,6 +81,9 @@ function NavBar() {
                 </li>
                 <li>
                     <NavLink to="/explorer" className="nav-link">Explorer</NavLink>
+                </li>
+                <li>
+                    <NavLink to="/sensemaking" className="nav-link">Sensemaking</NavLink>
                 </li>
                 <li>
                     <NavLink to="/composer" className="nav-link">Composer</NavLink>
