@@ -185,9 +185,6 @@ const ExplorerPage = () => {
                   <div className="mono" style={{ fontWeight: 'bold', marginBottom: 'var(--spacing-xs)' }}>
                     {session.title || 'Untitled Note'}
                   </div>
-                  <div className="text-light" style={{ fontSize: 'var(--font-size-small)' }}>
-                    by @{session.userName || 'anonymous'}
-                  </div>
                   {session.similarity && (
                     <div style={{ fontSize: 'var(--font-size-small)', color: 'var(--color-primary)', marginTop: 'var(--spacing-xs)' }}>
                       Similarity: {(parseFloat(session.similarity) * 100).toFixed(1)}%
@@ -209,7 +206,7 @@ const ExplorerPage = () => {
       }}>
         {selectedSession ? (
           <>
-            {/* Header */}
+            {/* Single Header */}
             <div className="card" style={{ 
               margin: 'var(--spacing-xl) var(--spacing-xl) 0',
               padding: 'var(--spacing-md)',
@@ -240,120 +237,131 @@ const ExplorerPage = () => {
                 )}
               </div>
 
-              {/* Atomic Ideas Tags */}
-              {selectedSession?.atomicIdeas && (
-                <div style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 'var(--spacing-xs)',
-                  marginTop: 'var(--spacing-sm)'
+              {/* Ideas Section */}
+              <div style={{ marginTop: 'var(--spacing-md)' }}>
+                <div style={{ 
+                  color: 'var(--color-text-light)',
+                  fontSize: '0.8rem',
+                  fontFamily: 'var(--font-mono)',
+                  marginBottom: 'var(--spacing-sm)',
+                  opacity: 0.8
                 }}>
-                  {selectedSession.atomicIdeas
-                    .split(':::')
-                    .map(idea => idea.trim())
-                    .filter(idea => idea.length > 0)
-                    .map((idea, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleIdeaClick(idea)}
-                        style={{
-                          backgroundColor: selectedIdea === idea ? 
-                            'var(--color-primary)' : 
-                            'var(--color-bg-alt)',
-                          color: selectedIdea === idea ?
-                            'var(--color-bg)' :
-                            'var(--color-primary)',
-                          padding: '2px var(--spacing-sm)',
-                          borderRadius: '100px',
-                          fontSize: '0.7rem',
-                          fontFamily: 'var(--font-mono)',
-                          whiteSpace: 'nowrap',
-                          opacity: isSearchingIdea ? 0.5 : 0.8,
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          border: `1px solid var(--color-primary)`,
-                          boxShadow: selectedIdea === idea ?
-                            '0 0 4px var(--color-primary)' :
-                            'none'
-                        }}
-                      >
-                        {idea}
-                      </div>
-                    ))}
+                  Atomic Ideas
                 </div>
-              )}
-            </div>
-
-            {/* Content Panels Container */}
-            <div style={{ 
-              display: 'grid',
-              gridTemplateColumns: '1fr',
-              flex: 1,
-              overflow: 'hidden'
-            }}>
-              {/* Summary Panel */}
-              <div style={{ 
-                padding: 'var(--spacing-xl)',
-                height: '100%',
-                backgroundColor: 'var(--color-bg)',
-                overflowY: 'auto'
-              }}>
-                {/* Summary Section */}
-                <div className="card" style={{ marginBottom: 'var(--spacing-md)' }}>
-                  <div style={{ 
-                    fontSize: 'var(--font-size-base)',
-                    color: 'var(--color-text-light)'
-                  }}>
-                    Summary
-                  </div>
-                </div>
-                <div className="card mono" style={{
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 'var(--line-height)',
-                  padding: 'var(--spacing-xl)',
-                  fontSize: 'var(--font-size-base)',
-                  marginBottom: 'var(--spacing-xl)'
-                }}>
-                  {selectedSession.summary || 'No summary available'}
-                </div>
-
-                {/* Atomic Ideas Section */}
-                <div className="card" style={{ marginBottom: 'var(--spacing-md)' }}>
-                  <div style={{ 
-                    fontSize: 'var(--font-size-base)',
-                    color: 'var(--color-text-light)',
+                
+                {/* Atomic Ideas Tags */}
+                {selectedSession?.atomicIdeas && (
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 'var(--spacing-xs)',
                     marginBottom: 'var(--spacing-md)'
                   }}>
-                    Atomic Ideas
-                  </div>
-                </div>
-                <div className="card mono" style={{
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 'var(--line-height)',
-                  padding: 'var(--spacing-xl)',
-                  fontSize: 'var(--font-size-base)'
-                }}>
-                  {selectedSession.atomicIdeas ? (
-                    selectedSession.atomicIdeas
+                    {selectedSession.atomicIdeas
                       .split(':::')
                       .map(idea => idea.trim())
                       .filter(idea => idea.length > 0)
                       .map((idea, index) => (
-                        <div key={index} style={{ marginBottom: 'var(--spacing-md)' }}>
+                        <div
+                          key={index}
+                          onClick={() => handleIdeaClick(idea)}
+                          style={{
+                            backgroundColor: selectedIdea === idea ? 
+                              'var(--color-primary)' : 
+                              'var(--color-bg-alt)',
+                            color: selectedIdea === idea ?
+                              'var(--color-bg)' :
+                              'var(--color-primary)',
+                            padding: '2px var(--spacing-sm)',
+                            borderRadius: '100px',
+                            fontSize: '0.7rem',
+                            fontFamily: 'var(--font-mono)',
+                            whiteSpace: 'nowrap',
+                            opacity: isSearchingIdea ? 0.5 : 0.8,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            border: `1px solid var(--color-primary)`,
+                            boxShadow: selectedIdea === idea ?
+                              '0 0 4px var(--color-primary)' :
+                              'none'
+                          }}
+                        >
                           {idea}
                         </div>
-                      ))
-                  ) : (
-                    'No atomic ideas available'
-                  )}
+                      ))}
+                  </div>
+                )}
+
+                {/* Tensions Section */}
+                {selectedSession?.tensions && (
+                  <div style={{
+                    marginTop: 'var(--spacing-md)',
+                    padding: 'var(--spacing-md)',
+                    backgroundColor: 'var(--color-bg-alt)',
+                    borderRadius: 'var(--border-radius)',
+                    border: '1px solid var(--color-border)'
+                  }}>
+                    <div style={{ 
+                      marginBottom: 'var(--spacing-sm)',
+                      color: 'var(--color-text-light)',
+                      fontSize: '0.8rem',
+                      fontFamily: 'var(--font-mono)',
+                      opacity: 0.8
+                    }}>
+                      Tensions & Conflicts
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 'var(--spacing-xs)'
+                    }}>
+                      {selectedSession.tensions.split(':::')
+                        .map(tension => tension.trim())
+                        .filter(tension => tension.length > 0)
+                        .map((tension, index) => (
+                          <div
+                            key={index}
+                            style={{
+                              padding: 'var(--spacing-xs)',
+                              color: 'var(--color-text)',
+                              fontSize: '0.8rem',
+                              fontFamily: 'var(--font-mono)',
+                              opacity: 0.9,
+                              borderBottom: index < selectedSession.tensions.split(':::').filter(t => t.trim()).length - 1 ? 
+                                '1px solid var(--color-border)' : 
+                                'none'
+                            }}
+                          >
+                            {tension}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Summary */}
+              <div className="card" style={{ 
+                margin: 'var(--spacing-md) var(--spacing-xl)',
+                padding: 'var(--spacing-md)'
+              }}>
+                <div style={{ 
+                  fontSize: 'var(--font-size-small)',
+                  color: 'var(--color-text-light)',
+                  marginBottom: 'var(--spacing-xs)'
+                }}>
+                  Summary:
+                </div>
+                <div style={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedSession.summary || selectedSession.text}
                 </div>
               </div>
             </div>
           </>
         ) : (
           <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
+            display: 'flex',
+            justifyContent: 'center',
             alignItems: 'center', 
             height: '100%',
             color: 'var(--color-text-light)'
