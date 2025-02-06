@@ -44,7 +44,6 @@ function App() {
                     }}>
                         <div>
                             <h1>no_backspace_ @yincubator/{userName}</h1>
-                            <h2>cooperative sensemaking made easy</h2>
                         </div>
                         <NavBar />
                     </div>

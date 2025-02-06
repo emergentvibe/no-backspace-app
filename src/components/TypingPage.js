@@ -64,6 +64,7 @@ const TypingPage = ({ userName }) => {
     const [staleIndex, setStaleIndex] = useState(-1);
     const [showInactivityWarning, setShowInactivityWarning] = useState(false);
     const [savingStatus, setSavingStatus] = useState('');
+    const [sessionInfo, setSessionInfo] = useState('');  // New state for session info
     
     // Refs
     const inactivityTimeout = useRef(null);
@@ -111,6 +112,27 @@ const TypingPage = ({ userName }) => {
         peak: 0
     });
 
+    // Add session start time state
+    const [sessionStartTime] = useState(Date.now());
+    const [elapsedTime, setElapsedTime] = useState('0:00');
+    
+    // Add time formatting function
+    const formatElapsedTime = (startTime) => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    };
+    
+    // Add timer effect
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setElapsedTime(formatElapsedTime(sessionStartTime));
+        }, 1000);
+        
+        return () => clearInterval(timer);
+    }, [sessionStartTime]);
+
     // Update stats periodically
     useEffect(() => {
         const updateStats = () => {
@@ -129,6 +151,26 @@ const TypingPage = ({ userName }) => {
     const handleInputChange = (e) => {
         const newText = e.target.value;
         setInput(newText);
+        
+        // Show session info when user starts typing
+        if (!sessionInfo && newText.length === 1) {
+            setSessionInfo('Started new writing session');
+            setTimeout(() => {
+                const infoEl = document.querySelector('.session-info');
+                if (infoEl) infoEl.classList.add('hiding');
+                setTimeout(() => setSessionInfo(''), 300);
+            }, 2700);
+        }
+        
+        // Show autosave info every 500 characters
+        if (newText.length > 0 && newText.length % 500 === 0) {
+            setSessionInfo('Auto-saving in progress...');
+            setTimeout(() => {
+                const infoEl = document.querySelector('.session-info');
+                if (infoEl) infoEl.classList.add('hiding');
+                setTimeout(() => setSessionInfo(''), 300);
+            }, 1700);
+        }
         
         const now = Date.now();
         const timeDiff = now - lastTypedTime.current;
@@ -172,7 +214,7 @@ const TypingPage = ({ userName }) => {
             
             // Schedule save
             saveTimeout.current = setTimeout(() => {
-                debouncedSave(newText, false);
+                handleSave();
             }, 100000); // 100s more after warning
         }, 20000);
     };
@@ -351,156 +393,53 @@ const TypingPage = ({ userName }) => {
         return () => window.removeEventListener('resize', resizeCanvas);
     }, []);
 
-    // Debounced save function
-    const debouncedSave = async (text, shouldClose = false) => {
-        if (isSaving.current || !text.trim()) return;
-        
-        isSaving.current = true;
-        try {
-            setSavingStatus('Saving...');
-            let result;
-            
-            if (currentSessionId) {
-                // Update existing session
-                result = await updateSession(currentSessionId, text, shouldClose, userName);
-                console.log('📝 Updating session:', currentSessionId);
-            } else {
-                // Create new session
-                result = await createSession(text, shouldClose, userName);
-                console.log('✨ Creating new session');
-                if (!shouldClose) {
-                    // Store session ID for future updates
-                    setCurrentSessionId(result.session._id);
-                }
+    // Add autosave interval
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            if (input && !isSaving) {
+                await handleSave();
             }
-            
-            // If session is closed, wait for processing
-            if (shouldClose) {
-                setSavingStatus('Processing...');
-                const pollInterval = setInterval(async () => {
-                    const { status } = await checkSessionStatus(result.session._id);
-                    if (status.hasTitle && status.hasSummary) {
-                        setSavingStatus('Generated summary and title...');
-                    }
-                    if (status.hasAtomicIdeas) {
-                        setSavingStatus('Extracted atomic ideas...');
-                    }
-                    if (status.hasChunks) {
-                        setSavingStatus('Generated embeddings...');
-                    }
-                    if (!status.isProcessing) {
-                        clearInterval(pollInterval);
-                        setSavingStatus('Complete!');
-                        setTimeout(() => setSavingStatus(''), 2000);
-                    }
-                }, 2000);
-            } else {
-                setSavingStatus('Saved!');
-                setTimeout(() => setSavingStatus(''), 2000);
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('Error saving:', error);
-            setSavingStatus('Error saving');
-            setTimeout(() => setSavingStatus(''), 2000);
-        } finally {
-            setTimeout(() => {
-                isSaving.current = false;
-            }, 1000);
-        }
-    };
+        }, 30000); // Autosave every 30 seconds
 
-    const checkAndUpdateSession = async (text, shouldClose = false) => {
-        if (currentSessionId) {
-            try {
-                // Check if session is still open
-                const { status } = await checkSessionStatus(currentSessionId);
-                if (status.isClosed) {
-                    // Session is closed, create new one
-                    console.log('⚠️ Session closed, creating new one');
-                    const result = await createSession(text, shouldClose, userName);
-                    setCurrentSessionId(result.session._id);
-                    localStorage.setItem('currentSessionId', result.session._id);
-                    return result;
-                } else {
-                    // Session is open, update it
-                    return await updateSession(currentSessionId, text, shouldClose, userName);
-                }
-            } catch (error) {
-                // If any error occurs, create new session
-                console.log('⚠️ Error checking session, creating new one');
-                const result = await createSession(text, shouldClose, userName);
-                setCurrentSessionId(result.session._id);
-                localStorage.setItem('currentSessionId', result.session._id);
-                return result;
-            }
-        } else {
-            // No current session, create new one
-            const result = await createSession(text, shouldClose, userName);
-            if (!shouldClose) {
-                setCurrentSessionId(result.session._id);
-                localStorage.setItem('currentSessionId', result.session._id);
-            }
-            return result;
-        }
-    };
+        return () => clearInterval(interval);
+    }, [input, isSaving]);
 
     const handleSave = async () => {
         const textToSave = currentTextRef.current;
         if (!textToSave.trim() || isSaving.current) return;
         
         try {
+            console.log('\n=== Manual Save Started ===');
+            console.log('Current state:', {
+                sessionId: currentSessionId,
+                textLength: textToSave.length,
+                isSaving: isSaving.current,
+                userName
+            });
+            
             isSaving.current = true;
-            setSavingStatus('Processing note...');
+            setSavingStatus('Saving...');
             
-            console.log('Saving with userName:', userName);
+            // Just save the current session without closing it
+            const result = await checkAndUpdateSession(textToSave, false);
+            console.log('Save result:', result);
             
-            let result;
-            if (currentSessionId) {
-                // Close and process the current session
-                console.log('🔒 Processing current session:', currentSessionId);
-                result = await closeSession(currentSessionId);
-            } else {
-                // Create a new closed session for processing
-                console.log('✨ Creating new processed session');
-                const response = await createSession(textToSave, true, userName);
-                result = response.session;
-            }
+            setSavingStatus('Saved!');
+            setTimeout(() => {
+                const statusEl = document.querySelector('.status-message');
+                if (statusEl) statusEl.classList.add('hiding');
+                setTimeout(() => setSavingStatus(''), 300);
+            }, 1700);
             
-            // Clear current session state
-            setCurrentSessionId(null);
-            localStorage.removeItem('currentSessionId');
-            
-            // Clear input
-            setInput('');
-            currentTextRef.current = '';
-            localStorage.removeItem('currentText');
-            
-            // Poll for processing status
-            if (result?._id) {
-                const pollInterval = setInterval(async () => {
-                    const { status } = await checkSessionStatus(result._id);
-                    if (status.hasTitle && status.hasSummary) {
-                        setSavingStatus('Generated title and summary...');
-                    }
-                    if (status.hasAtomicIdeas) {
-                        setSavingStatus('Extracted ideas...');
-                    }
-                    if (!status.isProcessing) {
-                        clearInterval(pollInterval);
-                        setSavingStatus('Note saved!');
-                        setTimeout(() => setSavingStatus(''), 2000);
-                    }
-                }, 1000);
-            }
+            return result;
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error in handleSave:', error);
             setSavingStatus('Error saving');
-            setTimeout(() => setSavingStatus(''), 2000);
-            // Clear session ID on error
-            setCurrentSessionId(null);
-            localStorage.removeItem('currentSessionId');
+            setTimeout(() => {
+                const statusEl = document.querySelector('.status-message');
+                if (statusEl) statusEl.classList.add('hiding');
+                setTimeout(() => setSavingStatus(''), 300);
+            }, 1700);
         } finally {
             setTimeout(() => {
                 isSaving.current = false;
@@ -513,58 +452,77 @@ const TypingPage = ({ userName }) => {
         if (!textToSave.trim() || isSaving.current) return;
         
         try {
+            console.log('\n=== Starting New Session ===');
+            console.log('Current state:', {
+                currentSessionId,
+                textLength: textToSave.length,
+                isSaving: isSaving.current,
+                userName
+            });
+            
             isSaving.current = true;
-            setSavingStatus('Saving and closing session...');
+            setSessionInfo('Saving current session...');
             
-            console.log('Creating closed session with userName:', userName);
-            
+            // First, close the current session
             let result;
             if (currentSessionId) {
-                // Close existing session
-                console.log('🔒 Closing session:', currentSessionId);
-                result = await updateSession(currentSessionId, textToSave, true, userName);
+                console.log('Closing existing session:', currentSessionId);
+                result = await closeSession(currentSessionId);
             } else {
-                // Create new closed session
-                console.log('✨ Creating closed session');
-                result = await createSession(textToSave, true, userName);
+                console.log('Creating new closed session');
+                const response = await createSession(textToSave, true, userName);
+                result = response.session;
             }
             
+            console.log('Session close/create result:', result);
+            
+            // Clear current session state
+            setCurrentSessionId(null);
+            localStorage.removeItem('currentSessionId');
+            setInput('');
+            currentTextRef.current = '';
+            localStorage.removeItem('currentText');
+            setStaleIndex(-1);
+            
+            setSessionInfo('Starting new session...');
+            setTimeout(() => {
+                const infoEl = document.querySelector('.session-info');
+                if (infoEl) infoEl.classList.add('hiding');
+                setTimeout(() => setSessionInfo(''), 300);
+            }, 1700);
+            
             // Wait for processing
-            if (result?.session?._id) {
-                setSavingStatus('Processing...');
+            if (result?._id) {
+                console.log('Starting processing poll for session:', result._id);
                 const pollInterval = setInterval(async () => {
-                    const { status } = await checkSessionStatus(result.session._id);
-                    if (status.hasTitle && status.hasSummary) {
-                        setSavingStatus('Generated summary and title...');
-                    }
-                    if (status.hasAtomicIdeas) {
-                        setSavingStatus('Extracted atomic ideas...');
-                    }
-                    if (status.hasChunks) {
-                        setSavingStatus('Generated embeddings...');
-                    }
+                    const { status } = await checkSessionStatus(result._id);
+                    console.log('Poll status:', { sessionId: result._id, ...status });
                     if (!status.isProcessing) {
                         clearInterval(pollInterval);
-                        setSavingStatus('Complete!');
-                        setTimeout(() => setSavingStatus(''), 2000);
-                        
-                        // Clear state and storage
-                        setInput('');
-                        setCurrentSessionId(null);
-                        localStorage.removeItem('currentText');
-                        localStorage.removeItem('currentSessionId');
-                        currentTextRef.current = '';
-                        setStaleIndex(-1);
+                        console.log('Session processing complete:', result._id);
+                        setSavingStatus('Ready for new session');
+                        setTimeout(() => {
+                            const statusEl = document.querySelector('.status-message');
+                            if (statusEl) statusEl.classList.add('hiding');
+                            setTimeout(() => setSavingStatus(''), 300);
+                        }, 1700);
                     }
                 }, 2000);
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error in handleStartNew:', error);
             setSavingStatus('Error saving');
-            setTimeout(() => setSavingStatus(''), 2000);
-            // Clear session ID on error
-            setCurrentSessionId(null);
-            localStorage.removeItem('currentSessionId');
+            setSessionInfo('Failed to start new session');
+            setTimeout(() => {
+                const statusEl = document.querySelector('.status-message');
+                const infoEl = document.querySelector('.session-info');
+                if (statusEl) statusEl.classList.add('hiding');
+                if (infoEl) infoEl.classList.add('hiding');
+                setTimeout(() => {
+                    setSavingStatus('');
+                    setSessionInfo('');
+                }, 300);
+            }, 1700);
         } finally {
             setTimeout(() => {
                 isSaving.current = false;
@@ -621,6 +579,60 @@ const TypingPage = ({ userName }) => {
         console.log('TypingPage mounted with userName:', userName);
     }, [userName]);
 
+    const checkAndUpdateSession = async (text, shouldClose = false) => {
+        console.log('\n=== Check and Update Session ===');
+        console.log('Parameters:', {
+            textLength: text.length,
+            shouldClose,
+            currentSessionId,
+            userName
+        });
+        
+        if (currentSessionId) {
+            try {
+                // Check if session is still open
+                console.log('Checking status of session:', currentSessionId);
+                const { status } = await checkSessionStatus(currentSessionId);
+                console.log('Session status:', status);
+                
+                if (status.isClosed) {
+                    // Session is closed, create new one
+                    console.log('⚠️ Session closed, creating new one');
+                    const result = await createSession(text, shouldClose, userName);
+                    console.log('New session created:', result);
+                    setCurrentSessionId(result.session._id);
+                    localStorage.setItem('currentSessionId', result.session._id);
+                    return result;
+                } else {
+                    // Session is open, update it
+                    console.log('Updating existing session:', currentSessionId);
+                    const result = await updateSession(currentSessionId, text, shouldClose, userName);
+                    console.log('Session update result:', result);
+                    return result;
+                }
+            } catch (error) {
+                console.error('Error in session check/update:', error);
+                // If any error occurs, create new session
+                console.log('⚠️ Error checking session, creating new one');
+                const result = await createSession(text, shouldClose, userName);
+                console.log('New session created:', result);
+                setCurrentSessionId(result.session._id);
+                localStorage.setItem('currentSessionId', result.session._id);
+                return result;
+            }
+        } else {
+            // No current session, create new one
+            console.log('Creating new session (no current session)');
+            const result = await createSession(text, shouldClose, userName);
+            console.log('New session created:', result);
+            if (!shouldClose) {
+                setCurrentSessionId(result.session._id);
+                localStorage.setItem('currentSessionId', result.session._id);
+            }
+            return result;
+        }
+    };
+
     return (
         <div className="typing-page">
             <style>{`
@@ -665,6 +677,77 @@ const TypingPage = ({ userName }) => {
                 .icon-button:disabled {
                     opacity: 0.5;
                     cursor: not-allowed;
+                }
+                .status-container {
+                    position: fixed;
+                    top: calc(var(--navbar-height, 60px) + var(--button-bar-height) + var(--spacing-sm, 8px));
+                    left: 0;
+                    right: 0;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: var(--spacing-xs, 4px);
+                    z-index: 100;
+                }
+                
+                .status-message {
+                    background: var(--color-background-light);
+                    padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+                    border-radius: 4px;
+                    font-size: 14px;
+                    color: var(--color-text);
+                    opacity: 0;
+                    transform: translateY(-10px);
+                    transition: all 0.3s ease;
+                    pointer-events: none;
+                }
+                
+                .status-message.visible {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+                
+                .status-message.hiding {
+                    opacity: 0;
+                    transform: translateY(10px);
+                }
+                
+                .session-info {
+                    color: var(--color-text-light);
+                    font-size: 12px;
+                }
+                
+                .stats-container {
+                    position: fixed;
+                    bottom: 140px; /* Position above the graph */
+                    right: var(--spacing-md, 12px);
+                    display: flex;
+                    flex-direction: row;
+                    align-items: center;
+                    gap: var(--spacing-md, 12px);
+                    font-family: var(--font-mono);
+                    font-size: var(--font-size-small);
+                    color: var(--color-text-light);
+                    z-index: 1000; /* Increased z-index to ensure visibility */
+                    background-color: var(--color-bg);
+                    padding: 8px 12px; /* Explicit padding values */
+                    border-radius: var(--border-radius);
+                    border: 1px solid var(--color-border);
+                    margin-bottom: 20px; /* Explicit margin value */
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* Added subtle shadow for better visibility */
+                }
+
+                .typing-speed-graph {
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    height: 120px;
+                    background: var(--color-bg);
+                    border-top: 1px solid var(--color-border);
+                    padding: 10px;
+                    z-index: 100;
+                    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
                 }
             `}</style>
             <div className="button-container">
@@ -712,17 +795,19 @@ const TypingPage = ({ userName }) => {
                 </button>
             </div>
             
-            <div 
-                className="inactivity-indicator" 
-                style={{ 
-                    opacity: showInactivityWarning || savingStatus ? 1 : 0,
-                    transform: showInactivityWarning || savingStatus ? 'translateY(0)' : 'translateY(10px)'
-                }}
-            >
-                <span>
-                    {savingStatus || (showInactivityWarning && 'Inactivity detected, session will be auto-saved soon')}
-                </span>
-                {showInactivityWarning && !savingStatus && <div className="countdown-circle" />}
+            <div className="status-container">
+                <div className={`status-message ${savingStatus ? 'visible' : ''}`}>
+                    <span>{savingStatus}</span>
+                </div>
+                <div className={`status-message session-info ${sessionInfo ? 'visible' : ''}`}>
+                    <span>{sessionInfo}</span>
+                </div>
+                <div className={`status-message ${showInactivityWarning ? 'visible' : ''}`}>
+                    <span>
+                        {showInactivityWarning && 'Inactivity detected, session will be auto-saved soon'}
+                    </span>
+                    {showInactivityWarning && <div className="countdown-circle" />}
+                </div>
             </div>
             
             <div
@@ -747,18 +832,12 @@ const TypingPage = ({ userName }) => {
                     autoFocus
                 />
                 <div className="gradient-overlay"></div>
-                
-                <div style={{
-                    position: 'fixed',
-                    bottom: 'var(--spacing-md)',
-                    left: 'var(--spacing-md)',
-                    fontSize: 'var(--font-size-small)',
-                    color: 'var(--color-text-light)',
-                    fontFamily: 'var(--font-mono)',
-                    zIndex: 10
-                }}>
-                    {input.length} characters
-                </div>
+            </div>
+
+            <div className="stats-container">
+                <span>{input.length} characters</span>
+                <span>•</span>
+                <span>{elapsedTime} elapsed</span>
             </div>
 
             <div className="typing-speed-graph">

@@ -4,6 +4,9 @@ const API_URL = 'http://localhost:4000'; // URL of your Express server
 
 export async function createSession(text, isClosed = false, userName = 'Anonymous') {
   try {
+    console.log('\n=== Creating Session API Call ===');
+    console.log('Parameters:', { textLength: text.length, isClosed, userName });
+    
     const response = await fetch(`${API_URL}/sessions`, {
       method: 'POST',
       headers: {
@@ -16,16 +19,19 @@ export async function createSession(text, isClosed = false, userName = 'Anonymou
       throw new Error('Failed to create session');
     }
     
-    return response.json();
+    const result = await response.json();
+    console.log('Create session response:', result);
+    return result;
   } catch (error) {
-    console.error('Error creating session:', error);
+    console.error('Error in createSession:', error);
     throw error;
   }
 }
 
 export async function updateSession(sessionId, text, shouldClose = false, userName = 'Anonymous') {
   try {
-    console.log('🔄 Checking session:', sessionId);
+    console.log('\n=== Updating Session API Call ===');
+    console.log('Parameters:', { sessionId, textLength: text.length, shouldClose, userName });
     
     // First check if session is already closed
     const checkResponse = await fetch(`${API_URL}/sessions/${sessionId}/status`);
@@ -33,6 +39,7 @@ export async function updateSession(sessionId, text, shouldClose = false, userNa
       throw new Error('Failed to check session status');
     }
     const { status } = await checkResponse.json();
+    console.log('Session status check:', status);
     
     // If session is already closed, create a new one instead
     if (status.isClosed) {
@@ -56,24 +63,31 @@ export async function updateSession(sessionId, text, shouldClose = false, userNa
       throw new Error('Failed to update session');
     }
     
-    return response.json();
+    const result = await response.json();
+    console.log('Update session response:', result);
+    return result;
   } catch (error) {
-    console.error('Error updating session:', error);
+    console.error('Error in updateSession:', error);
     throw error;
   }
 }
 
 export const closeSession = async (sessionId) => {
   try {
+    console.log('\n=== Closing Session API Call ===');
+    console.log('Session ID:', sessionId);
+    
     const response = await fetch(`${API_URL}/sessions/${sessionId}/close`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
     if (!response.ok) throw new Error('Failed to close session');
-    const data = await response.json();
-    return data.session;
+    
+    const result = await response.json();
+    console.log('Close session response:', result);
+    return result.session;
   } catch (error) {
-    console.error('Error closing session:', error);
+    console.error('Error in closeSession:', error);
     throw error;
   }
 };
@@ -126,13 +140,19 @@ export const searchWithinSession = async (sessionId, ideaText) => {
 
 export async function checkSessionStatus(sessionId) {
   try {
+    console.log('\n=== Checking Session Status API Call ===');
+    console.log('Session ID:', sessionId);
+    
     const response = await fetch(`${API_URL}/sessions/${sessionId}/status`);
     if (!response.ok) {
       throw new Error('Failed to check session status');
     }
-    return response.json();
+    
+    const result = await response.json();
+    console.log('Status check response:', result);
+    return result;
   } catch (error) {
-    console.error('Error checking session status:', error);
+    console.error('Error in checkSessionStatus:', error);
     throw error;
   }
 }
