@@ -177,3 +177,43 @@ export const sensemakeSessions = async (sessionIds) => {
     throw error;
   }
 };
+
+export const deleteSession = async (sessionId) => {
+    try {
+        console.log('\n=== Deleting Session API Call ===');
+        console.log('Session ID:', sessionId);
+        
+        const response = await fetch(`${API_URL}/sessions/${sessionId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) throw new Error('Failed to delete session');
+        
+        const result = await response.json();
+        console.log('Delete session response:', result);
+        return result;
+    } catch (error) {
+        console.error('Error in deleteSession:', error);
+        throw error;
+    }
+};
+
+export const reprocessSession = async (sessionId) => {
+    try {
+        console.log('\n=== Reprocessing Session API Call ===');
+        console.log('Session ID:', sessionId);
+        
+        const response = await fetch(`${API_URL}/sessions/${sessionId}/reprocess`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) throw new Error('Failed to reprocess session');
+        
+        const result = await response.json();
+        console.log('Reprocess session response:', result);
+        return result;
+    } catch (error) {
+        console.error('Error in reprocessSession:', error);
+        throw error;
+    }
+};

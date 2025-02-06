@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { getSessions, searchSessions, searchWithinSession } from '../services/sessionService';
+import { getSessions, searchSessions, searchWithinSession, deleteSession, reprocessSession, checkSessionStatus } from '../services/sessionService';
 import HighlightedText from './HighlightedText';
 import '../globalStyles.css';
 
@@ -16,6 +16,8 @@ const ExplorerPage = () => {
   const [highlights, setHighlights] = useState([]);
   const [isSearchingIdea, setIsSearchingIdea] = useState(false);
   const [selectedIdea, setSelectedIdea] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(null); // Track which session's menu is open
+  const [reprocessingIds, setReprocessingIds] = useState(new Set());
   const location = useLocation();
 
   useEffect(() => {
@@ -112,6 +114,83 @@ const ExplorerPage = () => {
   // Determine which sessions to show in sidebar
   const displayedSessions = searchResults.length > 0 ? searchResults : sessions;
 
+  const handleDeleteSession = async (sessionId, event) => {
+    event.stopPropagation(); // Prevent session selection
+    if (!window.confirm('Are you sure you want to delete this note?')) return;
+    
+    try {
+      await deleteSession(sessionId);
+      // Remove from sessions list
+      setSessions(sessions.filter(s => s._id !== sessionId));
+      // Clear selection if deleted session was selected
+      if (selectedSession?._id === sessionId) {
+        setSelectedSession(null);
+      }
+      setMenuOpen(null);
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      setError('Failed to delete note');
+    }
+  };
+
+  // Add polling function for reprocessing
+  const pollReprocessingStatus = async (sessionId) => {
+    try {
+      const result = await checkSessionStatus(sessionId);
+      const { status } = result;
+      
+      // If still processing, poll again in 2 seconds
+      if (status.isProcessing) {
+        setTimeout(() => pollReprocessingStatus(sessionId), 2000);
+        return;
+      }
+
+      // Processing complete, refresh the session data
+      const data = await getSessions();
+      setSessions(data || []);
+      setReprocessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
+
+      // Update selected session if it was the one being reprocessed
+      if (selectedSession?._id === sessionId) {
+        const updatedSession = data.find(s => s._id === sessionId);
+        if (updatedSession) {
+          setSelectedSession(updatedSession);
+        }
+      }
+    } catch (error) {
+      console.error('Error polling reprocess status:', error);
+      // Remove from reprocessing state on error
+      setReprocessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
+    }
+  };
+
+  const handleReprocessSession = async (sessionId, event) => {
+    event.stopPropagation(); // Prevent session selection
+    try {
+      setReprocessingIds(prev => new Set([...prev, sessionId]));
+      const result = await reprocessSession(sessionId);
+      // Start polling for completion
+      pollReprocessingStatus(sessionId);
+      setMenuOpen(null);
+    } catch (error) {
+      console.error('Error reprocessing session:', error);
+      setError('Failed to reprocess note');
+      setReprocessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
+    }
+  };
+
   return (
     <div style={{ 
       display: 'grid',
@@ -176,17 +255,109 @@ const ExplorerPage = () => {
                     cursor: 'pointer',
                     backgroundColor: selectedSession?._id === session._id ? 'var(--color-border)' : 'var(--color-bg-alt)',
                     transition: 'all var(--transition-base)',
-                    borderRadius: 'var(--border-radius)'
+                    borderRadius: 'var(--border-radius)',
+                    position: 'relative' // Added for menu positioning
                   }}
                 >
-                  <div className="text-light" style={{ fontSize: 'var(--font-size-small)', marginBottom: 'var(--spacing-xs)' }}>
-                    {formatDate(session.createdAt)}
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start'
+                  }}>
+                    <div>
+                      <div className="text-light" style={{ 
+                        fontSize: 'var(--font-size-small)', 
+                        marginBottom: 'var(--spacing-xs)' 
+                      }}>
+                        {formatDate(session.createdAt)}
+                      </div>
+                      <div className="mono" style={{ 
+                        fontWeight: 'bold', 
+                        marginBottom: 'var(--spacing-xs)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--spacing-xs)'
+                      }}>
+                        {session.title || 'Untitled Note'}
+                        {reprocessingIds.has(session._id) && (
+                          <div className="loading-spinner" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Settings Menu Button */}
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpen(menuOpen === session._id ? null : session._id);
+                      }}
+                      style={{
+                        padding: 'var(--spacing-xs)',
+                        cursor: 'pointer',
+                        borderRadius: 'var(--border-radius)',
+                        opacity: menuOpen === session._id ? 1 : 0.6,
+                        transition: 'opacity var(--transition-base)',
+                        backgroundColor: menuOpen === session._id ? 'var(--color-bg)' : 'transparent'
+                      }}
+                    >
+                      ⋮
+                    </div>
+
+                    {/* Settings Menu */}
+                    {menuOpen === session._id && (
+                      <div 
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          backgroundColor: 'var(--color-bg)',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: 'var(--border-radius)',
+                          padding: 'var(--spacing-xs)',
+                          zIndex: 1000,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        <div
+                          onClick={(e) => handleDeleteSession(session._id, e)}
+                          style={{
+                            padding: 'var(--spacing-xs) var(--spacing-sm)',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            color: 'var(--color-accent)',
+                            borderRadius: 'var(--border-radius)',
+                            transition: 'background-color var(--transition-base)'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--color-border)'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        >
+                          Delete Note
+                        </div>
+                        <div
+                          onClick={(e) => handleReprocessSession(session._id, e)}
+                          style={{
+                            padding: 'var(--spacing-xs) var(--spacing-sm)',
+                            cursor: reprocessingIds.has(session._id) ? 'not-allowed' : 'pointer',
+                            whiteSpace: 'nowrap',
+                            borderRadius: 'var(--border-radius)',
+                            transition: 'background-color var(--transition-base)',
+                            opacity: reprocessingIds.has(session._id) ? 0.5 : 1
+                          }}
+                          onMouseEnter={(e) => !reprocessingIds.has(session._id) && (e.target.style.backgroundColor = 'var(--color-border)')}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        >
+                          {reprocessingIds.has(session._id) ? 'Reprocessing...' : 'Reprocess Note'}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="mono" style={{ fontWeight: 'bold', marginBottom: 'var(--spacing-xs)' }}>
-                    {session.title || 'Untitled Note'}
-                  </div>
+
                   {session.similarity && (
-                    <div style={{ fontSize: 'var(--font-size-small)', color: 'var(--color-primary)', marginTop: 'var(--spacing-xs)' }}>
+                    <div style={{ 
+                      fontSize: 'var(--font-size-small)', 
+                      color: 'var(--color-primary)', 
+                      marginTop: 'var(--spacing-xs)' 
+                    }}>
                       Similarity: {(parseFloat(session.similarity) * 100).toFixed(1)}%
                     </div>
                   )}
