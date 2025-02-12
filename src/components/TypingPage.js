@@ -610,7 +610,7 @@ const TypingPage = ({ userName }) => {
                     console.log('Session update result:', result);
                     return result;
                 }
-            } catch (error) {
+        } catch (error) {
                 console.error('Error in session check/update:', error);
                 // If any error occurs, create new session
                 console.log('⚠️ Error checking session, creating new one');

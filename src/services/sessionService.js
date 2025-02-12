@@ -2,6 +2,15 @@
 
 const API_URL = 'http://localhost:4000'; // URL of your Express server
 
+// Helper function to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': token ? `Bearer ${token}` : ''
+  };
+};
+
 export async function createSession(text, isClosed = false, userName = 'Anonymous') {
   try {
     console.log('\n=== Creating Session API Call ===');
@@ -9,9 +18,7 @@ export async function createSession(text, isClosed = false, userName = 'Anonymou
     
     const response = await fetch(`${API_URL}/sessions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ text, isClosed, userName }),
     });
     
@@ -34,7 +41,9 @@ export async function updateSession(sessionId, text, shouldClose = false, userNa
     console.log('Parameters:', { sessionId, textLength: text.length, shouldClose, userName });
     
     // First check if session is already closed
-    const checkResponse = await fetch(`${API_URL}/sessions/${sessionId}/status`);
+    const checkResponse = await fetch(`${API_URL}/sessions/${sessionId}/status`, {
+      headers: getAuthHeaders()
+    });
     if (!checkResponse.ok) {
       throw new Error('Failed to check session status');
     }
@@ -50,7 +59,7 @@ export async function updateSession(sessionId, text, shouldClose = false, userNa
     console.log('📝 Updating session:', { sessionId, textLength: text.length, shouldClose });
     const response = await fetch(`${API_URL}/sessions/${sessionId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ 
         text, 
         userName,
@@ -79,7 +88,7 @@ export const closeSession = async (sessionId) => {
     
     const response = await fetch(`${API_URL}/sessions/${sessionId}/close`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to close session');
     
@@ -94,7 +103,9 @@ export const closeSession = async (sessionId) => {
 
 export const getSessions = async () => {
   try {
-    const response = await fetch(`${API_URL}/sessions`);
+    const response = await fetch(`${API_URL}/sessions`, {
+      headers: getAuthHeaders()
+    });
     if (!response.ok) throw new Error('Failed to fetch sessions');
     const data = await response.json();
     return data;
@@ -107,7 +118,9 @@ export const getSessions = async () => {
 export const searchSessions = async (query) => {
   try {
     const url = `${API_URL}/sessions/search?query=${encodeURIComponent(query)}`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: getAuthHeaders()
+    });
     if (!response.ok) throw new Error('Failed to search sessions');
     const { results } = await response.json();
     return results.map(result => ({
@@ -126,7 +139,7 @@ export const searchWithinSession = async (sessionId, ideaText) => {
   try {
     const response = await fetch(`${API_URL}/sessions/${sessionId}/search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ ideaText })
     });
     if (!response.ok) throw new Error('Failed to search within session');
@@ -143,7 +156,9 @@ export async function checkSessionStatus(sessionId) {
     console.log('\n=== Checking Session Status API Call ===');
     console.log('Session ID:', sessionId);
     
-    const response = await fetch(`${API_URL}/sessions/${sessionId}/status`);
+    const response = await fetch(`${API_URL}/sessions/${sessionId}/status`, {
+      headers: getAuthHeaders()
+    });
     if (!response.ok) {
       throw new Error('Failed to check session status');
     }
@@ -161,9 +176,7 @@ export const sensemakeSessions = async (sessionIds) => {
   try {
     const response = await fetch(`${API_URL}/sensemake`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ sessionIds })
     });
 
@@ -185,7 +198,7 @@ export const deleteSession = async (sessionId) => {
         
         const response = await fetch(`${API_URL}/sessions/${sessionId}`, {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
+            headers: getAuthHeaders()
         });
         if (!response.ok) throw new Error('Failed to delete session');
         
@@ -205,7 +218,7 @@ export const reprocessSession = async (sessionId) => {
         
         const response = await fetch(`${API_URL}/sessions/${sessionId}/reprocess`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: getAuthHeaders()
         });
         if (!response.ok) throw new Error('Failed to reprocess session');
         

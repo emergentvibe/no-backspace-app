@@ -18,7 +18,37 @@ const ExplorerPage = () => {
   const [selectedIdea, setSelectedIdea] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null); // Track which session's menu is open
   const [reprocessingIds, setReprocessingIds] = useState(new Set());
+  const [expandedSections, setExpandedSections] = useState({
+    ideas: false,
+    questions: false,
+    tensions: false,
+    summary: false
+  });
   const location = useLocation();
+
+  const styles = {
+    questionItem: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        marginBottom: '8px',
+        padding: '8px',
+        background: '#f8f9fa',
+        borderRadius: '4px'
+    },
+    scoreBadge: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: '24px',
+        height: '24px',
+        marginRight: '8px',
+        background: '#007bff',
+        color: 'white',
+        borderRadius: '12px',
+        fontSize: '12px',
+        fontWeight: 'bold'
+    }
+  };
 
   useEffect(() => {
     fetchSessions();
@@ -135,40 +165,30 @@ const ExplorerPage = () => {
 
   // Add polling function for reprocessing
   const pollReprocessingStatus = async (sessionId) => {
+    console.log('Polling status for session:', sessionId);
     try {
-      const result = await checkSessionStatus(sessionId);
-      const { status } = result;
-      
-      // If still processing, poll again in 2 seconds
-      if (status.isProcessing) {
-        setTimeout(() => pollReprocessingStatus(sessionId), 2000);
-        return;
-      }
+        const response = await fetch(`http://localhost:4000/sessions/${sessionId}/status`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) throw new Error('Failed to check status');
+        
+        const { status } = await response.json();
+        console.log('Poll status result:', status);
 
-      // Processing complete, refresh the session data
-      const data = await getSessions();
-      setSessions(data || []);
-      setReprocessingIds(prev => {
-        const next = new Set(prev);
-        next.delete(sessionId);
-        return next;
-      });
-
-      // Update selected session if it was the one being reprocessed
-      if (selectedSession?._id === sessionId) {
-        const updatedSession = data.find(s => s._id === sessionId);
-        if (updatedSession) {
-          setSelectedSession(updatedSession);
+        if (status.isProcessing) {
+            // Continue polling if still processing
+            setTimeout(() => pollReprocessingStatus(sessionId), 2000);
+        } else {
+            // Refresh the session data when processing is complete
+            const updatedSession = await fetchSession(sessionId);
+            if (updatedSession) {
+                setSelectedSession(updatedSession);
+                console.log('Updated session after processing:', updatedSession);
+            }
         }
-      }
     } catch (error) {
-      console.error('Error polling reprocess status:', error);
-      // Remove from reprocessing state on error
-      setReprocessingIds(prev => {
-        const next = new Set(prev);
-        next.delete(sessionId);
-        return next;
-      });
+        console.error('Error polling status:', error);
     }
   };
 
@@ -191,54 +211,56 @@ const ExplorerPage = () => {
     }
   };
 
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
   return (
-    <div style={{ 
+    <div className="explorer-container" style={{ 
       display: 'grid',
-      gridTemplateColumns: 'var(--sidebar-width) 1fr 1fr',
-      height: `calc(100vh - var(--navbar-height))`,
-      backgroundColor: 'var(--color-bg)',
-      position: 'relative'
+      gridTemplateColumns: '350px 1fr',
+      gap: 'var(--spacing-lg)',
+      padding: 'var(--spacing-lg)',
+      height: 'calc(100vh - var(--navbar-height))',
+      overflow: 'hidden'
     }}>
-      {/* Sidebar */}
-      <div style={{ 
-        backgroundColor: 'var(--color-bg-alt)',
-        borderRight: '1px solid var(--color-border)',
+      {/* Left Sidebar */}
+      <div className="sidebar" style={{
         display: 'flex',
         flexDirection: 'column',
+        gap: 'var(--spacing-md)',
         height: '100%',
-        position: 'sticky',
-        top: 'var(--navbar-height)',
+        overflow: 'hidden'
       }}>
         {/* Search Form */}
-        <div style={{ 
+        <form onSubmit={handleSearch} className="search-form" style={{
           padding: 'var(--spacing-md)',
-          borderBottom: '1px solid var(--color-border)',
-          backgroundColor: 'var(--color-bg-alt)'
+          backgroundColor: 'var(--color-bg-alt)',
+          borderRadius: 'var(--border-radius)',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
         }}>
-          <form onSubmit={handleSearch} className="search-form">
-            <div style={{ flex: 1 }}>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search notes..."
-                className="input"
-              />
-            </div>
-            <button 
-              type="submit"
-              disabled={isSearching}
-              className={`btn btn-primary ${isSearching ? 'disabled' : ''}`}
-            >
-              {isSearching ? 'Searching...' : 'Search'}
-            </button>
-          </form>
-        </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search notes..."
+            className="input"
+          />
+          <button type="submit" className="btn btn-primary">
+            Search
+          </button>
+        </form>
 
         {/* Sessions List */}
-        <div className="scrollable" style={{ 
+        <div className="sessions-list scrollable" style={{
           flex: 1,
-          padding: 'var(--spacing-md)'
+          overflow: 'auto',
+          backgroundColor: 'var(--color-bg-alt)',
+          borderRadius: 'var(--border-radius)',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
         }}>
           {error && <div className="error-message">{error}</div>}
           {isSearching ? (
@@ -249,118 +271,64 @@ const ExplorerPage = () => {
                 <div
                   key={session._id || session.id}
                   onClick={() => setSelectedSession(session)}
+                  className={`session-item ${selectedSession?._id === session._id ? 'selected' : ''}`}
                   style={{
-                    padding: 'var(--spacing-sm)',
-                    marginBottom: 'var(--spacing-sm)',
+                    padding: 'var(--spacing-md)',
+                    borderBottom: '1px solid var(--color-border)',
                     cursor: 'pointer',
-                    backgroundColor: selectedSession?._id === session._id ? 'var(--color-border)' : 'var(--color-bg-alt)',
-                    transition: 'all var(--transition-base)',
-                    borderRadius: 'var(--border-radius)',
-                    position: 'relative' // Added for menu positioning
+                    backgroundColor: selectedSession?._id === session._id ? 
+                      'var(--color-primary-light)' : 'transparent',
+                    color: selectedSession?._id === session._id ? 
+                      'white' : 'var(--color-text)',
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start'
-                  }}>
-                    <div>
-                      <div className="text-light" style={{ 
-                        fontSize: 'var(--font-size-small)', 
-                        marginBottom: 'var(--spacing-xs)' 
-                      }}>
-                        {formatDate(session.createdAt)}
-                      </div>
-                      <div className="mono" style={{ 
-                        fontWeight: 'bold', 
-                        marginBottom: 'var(--spacing-xs)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--spacing-xs)'
-                      }}>
-                        {session.title || 'Untitled Note'}
-                        {reprocessingIds.has(session._id) && (
-                          <div className="loading-spinner" />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Settings Menu Button */}
-                    <div 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpen(menuOpen === session._id ? null : session._id);
-                      }}
-                      style={{
-                        padding: 'var(--spacing-xs)',
-                        cursor: 'pointer',
-                        borderRadius: 'var(--border-radius)',
-                        opacity: menuOpen === session._id ? 1 : 0.6,
-                        transition: 'opacity var(--transition-base)',
-                        backgroundColor: menuOpen === session._id ? 'var(--color-bg)' : 'transparent'
-                      }}
-                    >
-                      ⋮
-                    </div>
-
-                    {/* Settings Menu */}
-                    {menuOpen === session._id && (
-                      <div 
-                        style={{
-                          position: 'absolute',
-                          top: '100%',
-                          right: 0,
-                          backgroundColor: 'var(--color-bg)',
-                          border: '1px solid var(--color-border)',
-                          borderRadius: 'var(--border-radius)',
-                          padding: 'var(--spacing-xs)',
-                          zIndex: 1000,
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                        }}
-                      >
-                        <div
-                          onClick={(e) => handleDeleteSession(session._id, e)}
-                          style={{
-                            padding: 'var(--spacing-xs) var(--spacing-sm)',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            color: 'var(--color-accent)',
-                            borderRadius: 'var(--border-radius)',
-                            transition: 'background-color var(--transition-base)'
-                          }}
-                          onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--color-border)'}
-                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                        >
-                          Delete Note
-                        </div>
-                        <div
-                          onClick={(e) => handleReprocessSession(session._id, e)}
-                          style={{
-                            padding: 'var(--spacing-xs) var(--spacing-sm)',
-                            cursor: reprocessingIds.has(session._id) ? 'not-allowed' : 'pointer',
-                            whiteSpace: 'nowrap',
-                            borderRadius: 'var(--border-radius)',
-                            transition: 'background-color var(--transition-base)',
-                            opacity: reprocessingIds.has(session._id) ? 0.5 : 1
-                          }}
-                          onMouseEnter={(e) => !reprocessingIds.has(session._id) && (e.target.style.backgroundColor = 'var(--color-border)')}
-                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                        >
-                          {reprocessingIds.has(session._id) ? 'Reprocessing...' : 'Reprocess Note'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {session.similarity && (
+                  <div style={{ marginBottom: 'var(--spacing-sm)' }}>
+                    <h3 style={{ 
+                      margin: 0,
+                      fontSize: 'var(--font-size-base)',
+                      fontWeight: 'bold'
+                    }}>
+                      {session.title || 'Untitled Note'}
+                    </h3>
                     <div style={{ 
-                      fontSize: 'var(--font-size-small)', 
-                      color: 'var(--color-primary)', 
-                      marginTop: 'var(--spacing-xs)' 
+                      fontSize: 'var(--font-size-small)',
+                      color: selectedSession?._id === session._id ? 
+                        'rgba(255,255,255,0.8)' : 'var(--color-text-light)'
+                    }}>
+                      by @{session.userName || 'anonymous'} • {formatDate(session.createdAt)}
+                    </div>
+                  </div>
+                  {searchResults.length > 0 && (
+                    <div style={{ 
+                      fontSize: 'var(--font-size-small)',
+                      color: 'var(--color-accent)',
+                      marginTop: 'var(--spacing-xs)'
                     }}>
                       Similarity: {(parseFloat(session.similarity) * 100).toFixed(1)}%
                     </div>
                   )}
+                  <div style={{ 
+                    display: 'flex',
+                    gap: 'var(--spacing-sm)',
+                    marginTop: 'var(--spacing-sm)'
+                  }}>
+                    <button
+                      onClick={(e) => handleReprocessSession(session._id, e)}
+                      className="btn btn-secondary"
+                      disabled={reprocessingIds.has(session._id)}
+                      style={{ fontSize: 'var(--font-size-small)' }}
+                    >
+                      Reprocess
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteSession(session._id, e)}
+                      className="btn btn-danger"
+                      style={{ fontSize: 'var(--font-size-small)' }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -368,176 +336,276 @@ const ExplorerPage = () => {
         </div>
       </div>
 
-      {/* Main Content Container */}
-      <div style={{ 
-        gridColumn: '2 / span 2',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%'
+      {/* Main Content */}
+      <div className="main-content scrollable" style={{
+        height: '100%',
+        overflow: 'auto',
+        padding: 'var(--spacing-lg)',
+        backgroundColor: 'var(--color-bg-alt)',
+        borderRadius: 'var(--border-radius)',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
       }}>
         {selectedSession ? (
-          <>
-            {/* Single Header */}
-            <div className="card" style={{ 
-              margin: 'var(--spacing-xl) var(--spacing-xl) 0',
-              padding: 'var(--spacing-md)',
-              borderBottom: '1px solid var(--color-border)'
+          <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+            {/* Header */}
+            <div style={{ 
+              marginBottom: 'var(--spacing-xl)',
+              padding: 'var(--spacing-lg)',
+              backgroundColor: 'var(--color-bg)',
+              borderRadius: 'var(--border-radius)',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
             }}>
+              <h1 style={{ 
+                margin: 0,
+                marginBottom: 'var(--spacing-sm)',
+                color: 'var(--color-primary)'
+              }}>
+                {selectedSession.title || 'Untitled Note'}
+              </h1>
               <div style={{ 
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                marginBottom: 'var(--spacing-md)'
+                color: 'var(--color-text-light)',
+                fontSize: 'var(--font-size-small)'
               }}>
-                <div>
-                  <div style={{ 
-                    fontSize: 'var(--font-size-large)',
-                    fontWeight: 'bold',
-                    marginBottom: 'var(--spacing-xs)'
-                  }}>
-                    {selectedSession.title || 'Untitled Note'}
-                  </div>
-                  <div className="text-light" style={{ fontSize: 'var(--font-size-small)' }}>
-                    by @{selectedSession.userName || 'anonymous'} • {formatDate(selectedSession.createdAt)}
-                  </div>
-                </div>
-                {selectedSession.similarity && (
-                  <div style={{ color: 'var(--color-primary)' }}>
-                    Similarity Score: {(parseFloat(selectedSession.similarity) * 100).toFixed(1)}%
-                  </div>
-                )}
-              </div>
-
-              {/* Ideas Section */}
-              <div style={{ marginTop: 'var(--spacing-md)' }}>
-                <div style={{ 
-                  color: 'var(--color-text-light)',
-                  fontSize: '0.8rem',
-                  fontFamily: 'var(--font-mono)',
-                  marginBottom: 'var(--spacing-sm)',
-                  opacity: 0.8
-                }}>
-                  Atomic Ideas
-                </div>
-                
-                {/* Atomic Ideas Tags */}
-                {selectedSession?.atomicIdeas && (
-                  <div style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: 'var(--spacing-xs)',
-                    marginBottom: 'var(--spacing-md)'
-                  }}>
-                    {selectedSession.atomicIdeas
-                      .split(':::')
-                      .map(idea => idea.trim())
-                      .filter(idea => idea.length > 0)
-                      .map((idea, index) => (
-                        <div
-                          key={index}
-                          onClick={() => handleIdeaClick(idea)}
-                          style={{
-                            backgroundColor: selectedIdea === idea ? 
-                              'var(--color-primary)' : 
-                              'var(--color-bg-alt)',
-                            color: selectedIdea === idea ?
-                              'var(--color-bg)' :
-                              'var(--color-primary)',
-                            padding: '2px var(--spacing-sm)',
-                            borderRadius: '100px',
-                            fontSize: '0.7rem',
-                            fontFamily: 'var(--font-mono)',
-                            whiteSpace: 'nowrap',
-                            opacity: isSearchingIdea ? 0.5 : 0.8,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            border: `1px solid var(--color-primary)`,
-                            boxShadow: selectedIdea === idea ?
-                              '0 0 4px var(--color-primary)' :
-                              'none'
-                          }}
-                        >
-                          {idea}
-                        </div>
-                      ))}
-                  </div>
-                )}
-
-                {/* Tensions Section */}
-                {selectedSession?.tensions && (
-                  <div style={{
-                    marginTop: 'var(--spacing-md)',
-                    padding: 'var(--spacing-md)',
-                    backgroundColor: 'var(--color-bg-alt)',
-                    borderRadius: 'var(--border-radius)',
-                    border: '1px solid var(--color-border)'
-                  }}>
-                    <div style={{ 
-                      marginBottom: 'var(--spacing-sm)',
-                      color: 'var(--color-text-light)',
-                      fontSize: '0.8rem',
-                      fontFamily: 'var(--font-mono)',
-                      opacity: 0.8
-                    }}>
-                      Tensions & Conflicts
-                    </div>
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 'var(--spacing-xs)'
-                    }}>
-                      {selectedSession.tensions.split(':::')
-                        .map(tension => tension.trim())
-                        .filter(tension => tension.length > 0)
-                        .map((tension, index) => (
-                          <div
-                            key={index}
-                            style={{
-                              padding: 'var(--spacing-xs)',
-                              color: 'var(--color-text)',
-                              fontSize: '0.8rem',
-                              fontFamily: 'var(--font-mono)',
-                              opacity: 0.9,
-                              borderBottom: index < selectedSession.tensions.split(':::').filter(t => t.trim()).length - 1 ? 
-                                '1px solid var(--color-border)' : 
-                                'none'
-                            }}
-                          >
-                            {tension}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Summary */}
-              <div className="card" style={{ 
-                margin: 'var(--spacing-md) var(--spacing-xl)',
-                padding: 'var(--spacing-md)'
-              }}>
-                <div style={{ 
-                  fontSize: 'var(--font-size-small)',
-                  color: 'var(--color-text-light)',
-                  marginBottom: 'var(--spacing-xs)'
-                }}>
-                  Summary:
-                </div>
-                <div style={{ whiteSpace: 'pre-wrap' }}>
-                  {selectedSession.summary || selectedSession.text}
-                </div>
+                by @{selectedSession.userName || 'anonymous'} • {formatDate(selectedSession.createdAt)}
               </div>
             </div>
-          </>
+
+            {/* Summary Section */}
+            <section style={{ marginBottom: 'var(--spacing-xl)' }}>
+              <h2 style={{ 
+                color: 'var(--color-primary)',
+                marginBottom: 'var(--spacing-md)'
+              }}>Summary</h2>
+              <div className="card" style={{ 
+                backgroundColor: 'var(--color-bg)',
+                padding: 'var(--spacing-lg)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  maxHeight: expandedSections.summary ? 'none' : '100px',
+                  overflow: 'hidden',
+                  transition: 'max-height 0.3s ease-out',
+                  position: 'relative'
+                }}>
+                  {selectedSession.summary || 'No summary available'}
+                  {!expandedSections.summary && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: '50px',
+                      background: 'linear-gradient(transparent, var(--color-bg))',
+                      pointerEvents: 'none'
+                    }}/>
+                  )}
+                </div>
+                {selectedSession.summary && selectedSession.summary.length > 200 && (
+                  <button
+                    onClick={() => toggleSection('summary')}
+                    className="btn btn-secondary"
+                    style={{
+                      marginTop: 'var(--spacing-md)',
+                      width: '100%',
+                      padding: 'var(--spacing-sm)',
+                      fontSize: 'var(--font-size-small)'
+                    }}
+                  >
+                    {expandedSections.summary ? 'Show Less' : 'Show More'}
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {/* Questions Section */}
+            {selectedSession?.questions && (
+                <div className="section">
+                    <h3 onClick={() => toggleSection('questions')} style={{ cursor: 'pointer' }}>
+                        Questions {expandedSections.questions ? '▼' : '▶'}
+                    </h3>
+                    {expandedSections.questions && (
+                        <div>
+                            {selectedSession.questions
+                                .sort((a, b) => b.score - a.score)
+                                .map((question, index) => (
+                                    <div key={index} style={{ 
+                                        marginBottom: '10px',
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '10px'
+                                    }}>
+                                        <span style={{
+                                            backgroundColor: `rgba(52, 152, 219, ${question.score / 5})`,
+                                            color: 'white',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            fontSize: '0.8em',
+                                            minWidth: '24px',
+                                            textAlign: 'center'
+                                        }}>
+                                            {question.score}
+                                        </span>
+                                        <span style={{ flex: 1 }}>{question.text}</span>
+                                    </div>
+                                ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Ideas Grid */}
+            <section style={{ marginBottom: 'var(--spacing-xl)' }}>
+              <h2 style={{ 
+                color: 'var(--color-primary)',
+                marginBottom: 'var(--spacing-md)'
+              }}>Atomic Ideas</h2>
+              <div style={{ 
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                gap: 'var(--spacing-md)'
+              }}>
+                {(selectedSession.atomicIdeas || [])
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, expandedSections.ideas ? undefined : 6)
+                    .map((idea, index) => (
+                        <div
+                            key={index}
+                            onClick={() => handleIdeaClick(idea.text)}
+                            style={{
+                                padding: 'var(--spacing-md)',
+                                backgroundColor: selectedIdea === idea.text ? 
+                                    'var(--color-primary-light)' : 'var(--color-bg)',
+                                color: selectedIdea === idea.text ? 'white' : 'inherit',
+                                borderRadius: 'var(--border-radius)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                minHeight: '100px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 'var(--spacing-sm)'
+                            }}
+                        >
+                            <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>{idea.text}</div>
+                            <div style={{
+                                padding: '2px 8px',
+                                borderRadius: 'var(--border-radius)',
+                                backgroundColor: selectedIdea === idea.text ? 
+                                    'rgba(255,255,255,0.2)' : 'var(--color-primary-light)',
+                                color: selectedIdea === idea.text ? 'white' : 'white',
+                                fontSize: 'var(--font-size-small)',
+                                alignSelf: 'flex-start'
+                            }}>
+                                Score: {idea.score}
+                            </div>
+                        </div>
+                    ))}
+              </div>
+              {(selectedSession.atomicIdeas || []).length > 6 && (
+                  <button
+                      onClick={() => toggleSection('ideas')}
+                      className="btn btn-secondary"
+                      style={{
+                          marginTop: 'var(--spacing-md)',
+                          width: '100%',
+                          padding: 'var(--spacing-sm)',
+                          fontSize: 'var(--font-size-small)'
+                      }}
+                  >
+                      {expandedSections.ideas ? 'Show Less' : `Show ${selectedSession.atomicIdeas.length - 6} More Ideas`}
+                  </button>
+              )}
+            </section>
+
+            {/* Tensions Section */}
+            <section style={{ marginBottom: 'var(--spacing-xl)' }}>
+              <h2 style={{ 
+                color: 'var(--color-primary)',
+                marginBottom: 'var(--spacing-md)'
+              }}>Tensions</h2>
+              <div style={{ 
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--spacing-md)'
+              }}>
+                {(selectedSession.tensions || [])
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, expandedSections.tensions ? undefined : 3)
+                    .map((tension, index) => (
+                        <div
+                            key={index}
+                            className="card"
+                            style={{
+                                padding: 'var(--spacing-md)',
+                                backgroundColor: 'var(--color-bg)',
+                                borderLeft: '4px solid var(--color-accent)',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                                gap: 'var(--spacing-md)'
+                            }}
+                        >
+                            <div style={{ flex: 1 }}>{tension.text}</div>
+                            <div style={{
+                                padding: '2px 8px',
+                                borderRadius: 'var(--border-radius)',
+                                backgroundColor: 'var(--color-accent)',
+                                color: 'white',
+                                fontSize: 'var(--font-size-small)',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                Score: {tension.score}
+                            </div>
+                        </div>
+                    ))}
+              </div>
+              {(selectedSession.tensions || []).length > 3 && (
+                  <button
+                      onClick={() => toggleSection('tensions')}
+                      className="btn btn-secondary"
+                      style={{
+                          marginTop: 'var(--spacing-md)',
+                          width: '100%',
+                          padding: 'var(--spacing-sm)',
+                          fontSize: 'var(--font-size-small)'
+                      }}
+                  >
+                      {expandedSections.tensions ? 'Show Less' : `Show ${selectedSession.tensions.length - 3} More Tensions`}
+                  </button>
+              )}
+            </section>
+
+            {/* Original Text with Highlights */}
+            {selectedIdea && (
+              <section style={{ marginBottom: 'var(--spacing-xl)' }}>
+                <h2 style={{ 
+                  color: 'var(--color-primary)',
+                  marginBottom: 'var(--spacing-md)'
+                }}>Matches for Selected Idea</h2>
+                <div className="card" style={{ 
+                  backgroundColor: 'var(--color-bg)',
+                  padding: 'var(--spacing-lg)'
+                }}>
+                  <HighlightedText
+                    text={selectedSession.text}
+                    highlights={highlights}
+                  />
+                </div>
+              </section>
+            )}
+          </div>
         ) : (
           <div style={{ 
             display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
             justifyContent: 'center',
-            alignItems: 'center', 
             height: '100%',
             color: 'var(--color-text-light)'
           }}>
-            Select a note to view its contents
+            <h2>Select a note to view details</h2>
+            <p>Or use the search bar to find specific content</p>
           </div>
         )}
       </div>
