@@ -1,0 +1,91 @@
+.questions-panel {
+    position: fixed;
+    top: calc(var(--navbar-height) + var(--button-bar-height));
+    right: 0;
+    width: 350px;
+    bottom: calc(var(--graph-height) + var(--stats-bar-height));
+    background: var(--color-bg-alt);
+    border-left: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    z-index: 99;
+}
+
+.questions-header {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.questions-header h2 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text);
+}
+
+.questions-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    padding-bottom: calc(var(--spacing-md) * 2);
+    height: calc(100vh - var(--navbar-height) - var(--button-bar-height) - var(--graph-height) - var(--stats-bar-height) - 50px); /* 50px is header height */
+}
+
+.no-questions {
+    color: var(--color-text-light);
+    text-align: center;
+    padding: var(--spacing-lg);
+}
+
+.question-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    transition: transform 0.2s ease;
+}
+
+.question-item:hover {
+    transform: translateX(-2px);
+}
+
+.question-score {
+    background: var(--color-primary);
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    flex-shrink: 0;
+}
+
+.question-text {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    color: var(--color-text);
+}
+
+/* Scrollbar styling */
+.questions-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.questions-list::-webkit-scrollbar-track {
+    background: var(--color-bg);
+}
+
+.questions-list::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 4px;
+}
+
+.questions-list::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-light);
+} 

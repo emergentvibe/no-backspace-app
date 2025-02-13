@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { createSession, checkSessionStatus, updateSession, closeSession } from '../services/sessionService';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createSession, checkSessionStatus, updateSession, closeSession, processSession } from '../services/sessionService';
 import { useNavigate } from 'react-router-dom';
 import './TypingPage.css';
 import '../globalStyles.css';
-import { FaSave, FaPlus } from 'react-icons/fa';
+import { FaSave, FaPlus, FaQuestion } from 'react-icons/fa';
+import Questions from './Questions';
+import { TypingSpeedGraph } from './TypingSpeedGraph';
+import { QuestionsPanel } from './QuestionsPanel';
+import { ThemesPanel } from './ThemesPanel';
+import { processThemes } from '../services/themeService';
 
 // Constants
 const WINDOW_SIZE = 10 * 1000;  // 10 second window for current speed calculation
@@ -65,6 +70,10 @@ const TypingPage = ({ userName }) => {
     const [showInactivityWarning, setShowInactivityWarning] = useState(false);
     const [savingStatus, setSavingStatus] = useState('');
     const [sessionInfo, setSessionInfo] = useState('');  // New state for session info
+    const [questions, setQuestions] = useState([]);
+    const [processingQuestions, setProcessingQuestions] = useState(false);
+    const [themes, setThemes] = useState([]);
+    const [categorizedIdeas, setCategorizedIdeas] = useState({});
     
     // Refs
     const inactivityTimeout = useRef(null);
@@ -152,6 +161,12 @@ const TypingPage = ({ userName }) => {
         const newText = e.target.value;
         setInput(newText);
         
+        // Debug logging for character count
+        console.log('\n=== Text Change Debug ===');
+        console.log('Text length:', newText.length);
+        console.log('Previous text length:', currentTextRef.current?.length || 0);
+        console.log('Session ID:', currentSessionId);
+        
         // Show session info when user starts typing
         if (!sessionInfo && newText.length === 1) {
             setSessionInfo('Started new writing session');
@@ -162,14 +177,26 @@ const TypingPage = ({ userName }) => {
             }, 2700);
         }
         
-        // Show autosave info every 500 characters
-        if (newText.length > 0 && newText.length % 500 === 0) {
-            setSessionInfo('Auto-saving in progress...');
+        // Show autosave info and trigger processing check at 500 chars
+        if (newText.length >= 500 && (!currentTextRef.current || currentTextRef.current.length < 500)) {
+            console.log('🎯 Hit 500 character threshold');
+            console.log('Current session state:', {
+                sessionId: currentSessionId,
+                textLength: newText.length,
+                previousLength: currentTextRef.current?.length
+            });
+            
+            setSessionInfo('Processing triggered at 500 characters...');
             setTimeout(() => {
                 const infoEl = document.querySelector('.session-info');
                 if (infoEl) infoEl.classList.add('hiding');
                 setTimeout(() => setSessionInfo(''), 300);
             }, 1700);
+            
+            // Trigger check and update
+            checkAndUpdateSession(newText).catch(error => {
+                console.error('Error in 500-char processing:', error);
+            });
         }
         
         const now = Date.now();
@@ -463,11 +490,11 @@ const TypingPage = ({ userName }) => {
             isSaving.current = true;
             setSessionInfo('Saving current session...');
             
-            // First, close the current session
+            // First, close the current session using checkAndUpdateSession
             let result;
             if (currentSessionId) {
                 console.log('Closing existing session:', currentSessionId);
-                result = await closeSession(currentSessionId);
+                result = await checkAndUpdateSession(textToSave, true);
             } else {
                 console.log('Creating new closed session');
                 const response = await createSession(textToSave, true, userName);
@@ -610,7 +637,7 @@ const TypingPage = ({ userName }) => {
                     console.log('Session update result:', result);
                     return result;
                 }
-        } catch (error) {
+            } catch (error) {
                 console.error('Error in session check/update:', error);
                 // If any error occurs, create new session
                 console.log('⚠️ Error checking session, creating new one');
@@ -633,194 +660,97 @@ const TypingPage = ({ userName }) => {
         }
     };
 
+    const handleProcess = async () => {
+        if (!currentSessionId || processingQuestions) return;
+        
+        setSessionInfo('Processing...');
+        try {
+            const result = await processSession(currentSessionId);
+            setQuestions(result.session.questions || []);
+            setThemes(result.session.themes || []);
+            setCategorizedIdeas(result.session.categorizedIdeas || {});
+            setSessionInfo('Processing complete');
+        } catch (error) {
+            console.error('Processing failed:', error);
+            setSessionInfo('Failed to process');
+        }
+    };
+
+    // Add timeout to clear messages
+    useEffect(() => {
+        if (savingStatus) {
+            const timer = setTimeout(() => {
+                setSavingStatus('');
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [savingStatus]);
+
+    useEffect(() => {
+        if (sessionInfo) {
+            const timer = setTimeout(() => {
+                setSessionInfo('');
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [sessionInfo]);
+
+    useEffect(() => {
+        if (showInactivityWarning) {
+            const timer = setTimeout(() => {
+                setShowInactivityWarning(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [showInactivityWarning]);
+
     return (
         <div className="typing-page">
-            <style>{`
-                :root {
-                    --button-bar-height: 56px;
-                }
-                .button-container {
-                    position: fixed;
-                    top: calc(var(--navbar-height, 60px) + var(--spacing-md, 12px));
-                    left: 0;
-                    right: 0;
-                    height: var(--button-bar-height);
-                    padding: var(--spacing-md, 12px) var(--spacing-lg, 20px);
-                    background: var(--color-background);
-                    display: flex;
-                    justify-content: flex-end;
-                    align-items: center;
-                    gap: var(--spacing-sm, 10px);
-                    z-index: 100;
-                    border-bottom: 1px solid var(--color-border);
-                    box-sizing: border-box;
-                }
-                .editor-container {
-                    margin-top: calc(var(--navbar-height, 60px) + var(--button-bar-height) + var(--spacing-xl, 24px));
-                }
-                .icon-button {
-                    width: 36px;
-                    height: 36px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: none;
-                    border-radius: 6px;
-                    color: white;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                    background: var(--color-background-light);
-                }
-                .icon-button:hover:not(:disabled) {
-                    transform: translateY(-1px);
-                }
-                .icon-button:disabled {
-                    opacity: 0.5;
-                    cursor: not-allowed;
-                }
-                .status-container {
-                    position: fixed;
-                    top: calc(var(--navbar-height, 60px) + var(--button-bar-height) + var(--spacing-sm, 8px));
-                    left: 0;
-                    right: 0;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    gap: var(--spacing-xs, 4px);
-                    z-index: 100;
-                }
-                
-                .status-message {
-                    background: var(--color-background-light);
-                    padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
-                    border-radius: 4px;
-                    font-size: 14px;
-                    color: var(--color-text);
-                    opacity: 0;
-                    transform: translateY(-10px);
-                    transition: all 0.3s ease;
-                    pointer-events: none;
-                }
-                
-                .status-message.visible {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-                
-                .status-message.hiding {
-                    opacity: 0;
-                    transform: translateY(10px);
-                }
-                
-                .session-info {
-                    color: var(--color-text-light);
-                    font-size: 12px;
-                }
-                
-                .stats-container {
-                    position: fixed;
-                    bottom: 140px; /* Position above the graph */
-                    right: var(--spacing-md, 12px);
-                    display: flex;
-                    flex-direction: row;
-                    align-items: center;
-                    gap: var(--spacing-md, 12px);
-                    font-family: var(--font-mono);
-                    font-size: var(--font-size-small);
-                    color: var(--color-text-light);
-                    z-index: 1000; /* Increased z-index to ensure visibility */
-                    background-color: var(--color-bg);
-                    padding: 8px 12px; /* Explicit padding values */
-                    border-radius: var(--border-radius);
-                    border: 1px solid var(--color-border);
-                    margin-bottom: 20px; /* Explicit margin value */
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* Added subtle shadow for better visibility */
-                }
-
-                .typing-speed-graph {
-                    position: fixed;
-                    bottom: 0;
-                    left: 0;
-                    right: 0;
-                    height: 120px;
-                    background: var(--color-bg);
-                    border-top: 1px solid var(--color-border);
-                    padding: 10px;
-                    z-index: 100;
-                    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
-                }
-            `}</style>
-            <div className="button-container">
-                <button 
-                    onClick={handleSave}
-                    style={{
-                        width: '36px',
-                        height: '36px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: '#2196F3',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: 'white',
-                        cursor: input.trim() ? 'pointer' : 'not-allowed',
-                        opacity: input.trim() ? 1 : 0.5,
-                        transition: 'all 0.2s ease'
-                    }}
-                    disabled={!input.trim()}
-                    title="Save"
-                >
-                    <FaSave size={16} />
-                </button>
-                <button 
+            <div className="button-bar">
+                <button
+                    className="save-button save-new"
                     onClick={handleStartNew}
-                    style={{
-                        width: '36px',
-                        height: '36px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: '#4CAF50',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: 'white',
-                        cursor: input.trim() ? 'pointer' : 'not-allowed',
-                        opacity: input.trim() ? 1 : 0.5,
-                        transition: 'all 0.2s ease'
-                    }}
-                    disabled={!input.trim()}
-                    title="New"
+                    title="Start a new session"
                 >
-                    <FaPlus size={16} />
+                    <FaPlus /> New
+                </button>
+                <button
+                    className="save-button save-explore"
+                    onClick={handleSave}
+                    title="Save current session"
+                >
+                    <FaSave /> Save
+                </button>
+                <button
+                    className="save-button process-button"
+                    onClick={handleProcess}
+                    disabled={!currentSessionId || processingQuestions}
+                    title="Process current session"
+                >
+                    <FaQuestion /> Process
                 </button>
             </div>
-            
-            <div className="status-container">
-                <div className={`status-message ${savingStatus ? 'visible' : ''}`}>
-                    <span>{savingStatus}</span>
-                </div>
-                <div className={`status-message session-info ${sessionInfo ? 'visible' : ''}`}>
-                    <span>{sessionInfo}</span>
-                </div>
-                <div className={`status-message ${showInactivityWarning ? 'visible' : ''}`}>
-                    <span>
-                        {showInactivityWarning && 'Inactivity detected, session will be auto-saved soon'}
-                    </span>
-                    {showInactivityWarning && <div className="countdown-circle" />}
-                </div>
+
+            <div className="left-sidebar">
+                <ThemesPanel themes={themes} categorizedIdeas={categorizedIdeas} />
             </div>
-            
-            <div
-                onClick={handleContainerClick}
-                className="editor-container"
-            >
+
+            <div className="right-sidebar">
+                <QuestionsPanel 
+                    questions={questions}
+                    onProcessQuestions={handleProcess}
+                    isProcessing={sessionInfo === 'Processing...'}
+                />
+            </div>
+
+            <div className="editor-container" onClick={handleContainerClick}>
                 <div className="text-container mono">
                     {input.split('').map((char, index) => (
                         <span key={index} style={{ opacity: index < staleIndex ? 0 : 1 }}>
                             {char === ' ' ? '\u00A0' : char}
                         </span>
                     ))}
-                    <span className="blink">|</span>
+                    <span className="cursor">|</span>
                 </div>
                 <input
                     ref={inputRef}
@@ -831,36 +761,56 @@ const TypingPage = ({ userName }) => {
                     className="editor-input"
                     autoFocus
                 />
-                <div className="gradient-overlay"></div>
             </div>
 
-            <div className="stats-container">
-                <span>{input.length} characters</span>
-                <span>•</span>
-                <span>{elapsedTime} elapsed</span>
+            <div className="stats-bar">
+                <div className="stats-group">
+                    <div className="stat-item">
+                        <span className="stat-value">{stats.current}</span>
+                        <span className="stat-label">Current WPM</span>
+                    </div>
+                    <div className="stat-item">
+                        <span className="stat-value">{stats.peak}</span>
+                        <span className="stat-label">10min Peak</span>
+                    </div>
+                </div>
+                <div className="stats-group">
+                    <div className="stat-item">
+                        <span className="stat-value">{input.length}</span>
+                        <span className="stat-label">Characters</span>
+                    </div>
+                    <div className="stat-item">
+                        <span className="stat-value">{elapsedTime}</span>
+                        <span className="stat-label">Elapsed</span>
+                    </div>
+                </div>
             </div>
 
             <div className="typing-speed-graph">
-                <div className="stats-bar">
-                    {stats && (
-                        <>
-                            <div className="stat-item" style={{ color: '#4CAF50' }}>
-                                <span className="stat-value">{stats.current}</span>
-                                <span className="stat-label">Current WPM</span>
-                            </div>
-                            <div className="stat-item">
-                                <span className="stat-value">{stats.peak}</span>
-                                <span className="stat-label">10min Peak</span>
-                            </div>
-                        </>
-                    )}
-                </div>
                 <canvas
                     ref={graphCanvasRef}
                     className="graph-canvas"
                     width={800}
                     height={80}
                 />
+            </div>
+
+            <div className="status-container">
+                {savingStatus && (
+                    <div className={`status-message ${savingStatus ? 'visible' : ''}`}>
+                        {savingStatus}
+                    </div>
+                )}
+                {sessionInfo && (
+                    <div className={`status-message ${sessionInfo ? 'visible' : ''}`}>
+                        {sessionInfo}
+                    </div>
+                )}
+                {showInactivityWarning && (
+                    <div className="status-message visible">
+                        Inactivity detected, session will be auto-saved soon
+                    </div>
+                )}
             </div>
         </div>
     );

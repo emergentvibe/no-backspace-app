@@ -73,7 +73,7 @@ const ExplorerPage = () => {
   const fetchSessions = async () => {
     try {
       const data = await getSessions();
-      setSessions(data || []); // Ensure we always have an array
+      setSessions(data.sessions || []); // Access the sessions array from the response
       setSearchResults([]); // Clear search results when loading all sessions
       setError(null);
     } catch (error) {
@@ -142,7 +142,7 @@ const ExplorerPage = () => {
   };
 
   // Determine which sessions to show in sidebar
-  const displayedSessions = searchResults.length > 0 ? searchResults : sessions;
+  const displayedSessions = searchResults.length > 0 ? searchResults : (sessions || []);
 
   const handleDeleteSession = async (sessionId, event) => {
     event.stopPropagation(); // Prevent session selection

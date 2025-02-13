@@ -87,7 +87,7 @@ function App() {
                             padding: '0 var(--spacing-xl)'
                         }}>
                             <div>
-                                <h1>no_backspace_ @{user.name}</h1>
+                                <h1>no_backspace_ @emergentvibe</h1>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
                                 <NavBar />

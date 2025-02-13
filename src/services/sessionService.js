@@ -41,17 +41,16 @@ export async function updateSession(sessionId, text, shouldClose = false, userNa
     console.log('Parameters:', { sessionId, textLength: text.length, shouldClose, userName });
     
     // First check if session is already closed
-    const checkResponse = await fetch(`${API_URL}/sessions/${sessionId}/status`, {
+    const checkResponse = await fetch(`${API_URL}/sessions/${sessionId}`, {
       headers: getAuthHeaders()
     });
     if (!checkResponse.ok) {
-      throw new Error('Failed to check session status');
+      throw new Error('Failed to check session');
     }
-    const { status } = await checkResponse.json();
-    console.log('Session status check:', status);
+    const { session: existingSession } = await checkResponse.json();
     
     // If session is already closed, create a new one instead
-    if (status.isClosed) {
+    if (existingSession.isClosed) {
       console.log('⚠️ Session already closed, creating new one');
       return createSession(text, shouldClose, userName);
     }
@@ -63,8 +62,7 @@ export async function updateSession(sessionId, text, shouldClose = false, userNa
       body: JSON.stringify({ 
         text, 
         userName,
-        isClosed: shouldClose,
-        shouldReprocess: true
+        isClosed: shouldClose
       }),
     });
     
@@ -86,9 +84,10 @@ export const closeSession = async (sessionId) => {
     console.log('\n=== Closing Session API Call ===');
     console.log('Session ID:', sessionId);
     
-    const response = await fetch(`${API_URL}/sessions/${sessionId}/close`, {
-      method: 'POST',
+    const response = await fetch(`${API_URL}/sessions/${sessionId}`, {
+      method: 'PUT',
       headers: getAuthHeaders(),
+      body: JSON.stringify({ isClosed: true }),
     });
     if (!response.ok) throw new Error('Failed to close session');
     
@@ -230,3 +229,26 @@ export const reprocessSession = async (sessionId) => {
         throw error;
     }
 };
+
+export async function processSession(sessionId) {
+    try {
+        console.log('\n=== Processing Session API Call ===');
+        console.log('Parameters:', { sessionId });
+        
+        const response = await fetch(`${API_URL}/sessions/${sessionId}/process`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to process session');
+        }
+        
+        const result = await response.json();
+        console.log('Process session response:', result);
+        return result;
+    } catch (error) {
+        console.error('Error in processSession:', error);
+        throw error;
+    }
+}
