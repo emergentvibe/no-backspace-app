@@ -1,0 +1,61 @@
+.editor-container {
+    position: fixed;
+    top: calc(var(--navbar-height) + var(--button-bar-height));
+    left: var(--sidebar-width);
+    right: var(--sidebar-width);
+    bottom: calc(var(--graph-height) + var(--stats-bar-height));
+    background: var(--color-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.text-container {
+    font-family: var(--font-mono);
+    font-size: 24px;
+    white-space: pre;
+    color: var(--color-text);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 50%;
+    min-height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+.editor-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.old-text {
+    color: var(--color-text);
+    opacity: 1;
+    transition: opacity 5s ease-out;
+}
+
+.old-text.faded {
+    opacity: 0;
+}
+
+.new-text {
+    color: var(--color-text);
+    opacity: 1;
+}
+
+.cursor {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    animation: blink 1s step-end infinite;
+    color: var(--color-text);
+}
+
+@keyframes blink {
+    from, to { opacity: 1; }
+    50% { opacity: 0; }
+} 

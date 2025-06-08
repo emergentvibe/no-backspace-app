@@ -200,9 +200,13 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
 }
 
-.status-message {
+.status-message, .session-info {
     padding: 8px 16px;
     border-radius: 4px;
     background: var(--color-bg-alt);
@@ -211,6 +215,10 @@
     transition: opacity 0.3s ease;
 }
 
-.status-message.visible {
+.status-message.visible, .session-info.visible {
     opacity: 1;
+}
+
+.status-message.hiding, .session-info.hiding {
+    opacity: 0;
 }

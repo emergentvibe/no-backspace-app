@@ -1,75 +1,26 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createSession, checkSessionStatus, updateSession, closeSession, processSession } from '../services/sessionService';
 import { useNavigate } from 'react-router-dom';
 import './TypingPage.css';
 import '../globalStyles.css';
 import { FaSave, FaPlus, FaQuestion } from 'react-icons/fa';
 import Questions from './Questions';
-import { TypingSpeedGraph } from './TypingSpeedGraph';
+import { TypingSpeedGraph, useSpeedTracker, WINDOW_SIZE, GRAPH_WINDOW, MAX_WPM } from './TypingSpeedGraph';
 import { QuestionsPanel } from './QuestionsPanel';
 import { ThemesPanel } from './ThemesPanel';
 import { processThemes } from '../services/themeService';
-
-// Constants
-const WINDOW_SIZE = 10 * 1000;  // 10 second window for current speed calculation
-const GRAPH_WINDOW = 600 * 1000; // 10 minute window for graph display
-const MAX_WPM = 250;            // Cap WPM at 250
-
-class SpeedTracker {
-    constructor() {
-        this.samples = [];
-    }
-
-    // Add a new speed sample
-    addSample(speed, time) {
-        // Cap speed at MAX_WPM
-        const cappedSpeed = Math.min(speed, MAX_WPM);
-        this.samples.push({ speed: cappedSpeed, time });
-        
-        // Keep only last 10 minutes of data
-        const cutoff = time - GRAPH_WINDOW;
-        this.samples = this.samples.filter(s => s.time > cutoff);
-    }
-
-    // Get average speed for a time window
-    getAverage(currentTime, windowSize) {
-        const cutoff = currentTime - windowSize;
-        const windowSamples = this.samples.filter(s => s.time > cutoff && s.time <= currentTime);
-        
-        if (windowSamples.length === 0) return 0;
-        return windowSamples.reduce((sum, s) => sum + s.speed, 0) / windowSamples.length;
-    }
-
-    // Get peak of 1-second smoothed speeds over last 10 minutes
-    getPeak(currentTime) {
-        if (this.samples.length === 0) return 0;
-        
-        const cutoff = currentTime - GRAPH_WINDOW;
-        let peak = 0;
-        
-        // Check every second in the last 10 minutes
-        for (let t = cutoff; t <= currentTime; t += 1000) {
-            const speed = this.getAverage(t, 1000); // 1 second smoothing
-            peak = Math.max(peak, speed);
-        }
-        
-        return peak;
-    }
-
-    // Get all samples for graphing
-    getSamples() {
-        return this.samples;
-    }
-}
+import { SpeedMonitor } from './SpeedMonitor';
+import { TypingControls } from './TypingControls';
+import { TypingArea } from './TypingArea';
 
 const TypingPage = ({ userName }) => {
-    // Add currentSessionId to track active session
+    // State
     const [input, setInput] = useState(() => localStorage.getItem('currentText') || '');
     const [currentSessionId, setCurrentSessionId] = useState(() => localStorage.getItem('currentSessionId') || null);
     const [staleIndex, setStaleIndex] = useState(-1);
     const [showInactivityWarning, setShowInactivityWarning] = useState(false);
     const [savingStatus, setSavingStatus] = useState('');
-    const [sessionInfo, setSessionInfo] = useState('');  // New state for session info
+    const [sessionInfo, setSessionInfo] = useState('');
     const [questions, setQuestions] = useState([]);
     const [processingQuestions, setProcessingQuestions] = useState(false);
     const [themes, setThemes] = useState([]);
@@ -84,38 +35,9 @@ const TypingPage = ({ userName }) => {
     const navigate = useNavigate();
     const isSaving = useRef(false);
 
-    // Add new state and refs for typing speed with timestamps
-    const [typingSpeed, setTypingSpeed] = useState([]);
+    // Add new state and refs for typing speed tracking
     const lastTypedTime = useRef(Date.now());
-    const graphCanvasRef = useRef(null);
-    const animationFrameRef = useRef(null);
-    const speedUpdateRef = useRef(null);
-    const TEN_MINUTES = 10 * 60 * 1000;
-
-    // Constants for graph
-    const SMOOTHING_WINDOWS = {
-        short: 10000,    // 10 second window
-        medium: 60000,   // 1 minute window
-        long: 600000     // 10 minute window
-    };
-    const DISPLAY_WINDOW = 10 * 60 * 1000;  // 10 minutes in milliseconds
-    const SAMPLE_INTERVAL = 1000;  // Sample every second
-    const CHARS_PER_WORD = 5;  // Standard WPM calculation
-
-    // Constants for optimization and smoothing
-    const GRAPH_FPS = 20;  // Reduced from 30 to 20 for better performance
-    const STATS_UPDATE_INTERVAL = 1000;  // Increased to 1 second
-    const FRAME_INTERVAL = 1000 / GRAPH_FPS;
-    const MIN_SPEED_CHANGE = 1;  // Only update if speed changes by more than 1 WPM
-
-    // Exponential Moving Average weights
-    const EMA_WEIGHTS = {
-        short: 0.3,    // 10-second EMA: more responsive
-        medium: 0.09,   // 30-second EMA: balanced
-        long: 0.02     // 2-minute EMA: stable
-    };
-
-    const speedTracker = useRef(new SpeedTracker());
+    const speedTracker = useSpeedTracker();
     const [stats, setStats] = useState({
         current: 0,
         peak: 0
@@ -209,7 +131,7 @@ const TypingPage = ({ userName }) => {
             const minutesFraction = timeDiff / 60000;
             const instantWPM = Math.min(wordsTyped / minutesFraction, MAX_WPM); // Cap at MAX_WPM
 
-            // Add sample
+            // Add sample to speed tracker
             speedTracker.current.addSample(instantWPM, now);
         }
         
@@ -246,90 +168,6 @@ const TypingPage = ({ userName }) => {
         }, 20000);
     };
 
-    // Draw graph
-    const drawGraph = () => {
-        const canvas = graphCanvasRef.current;
-        if (!canvas) return;
-
-        const ctx = canvas.getContext('2d', { alpha: false });
-        const dpr = window.devicePixelRatio;
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
-        
-        const width = canvas.displayWidth;
-        const height = canvas.displayHeight - 20;
-        const now = Date.now();
-
-        // Clear and draw background
-        ctx.fillStyle = '#f8f9fa';
-        ctx.fillRect(0, 0, width, height + 20);
-
-        // Draw grid
-        ctx.beginPath();
-        ctx.strokeStyle = '#e1e1e1';
-        ctx.lineWidth = 1;
-
-        // Vertical lines (time)
-        for (let i = 0; i <= 10; i++) {
-            const x = width - (i * width / 10);
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, height);
-        }
-
-        // Horizontal lines (speed)
-        for (let wpm = 0; wpm <= MAX_WPM; wpm += 50) {
-            const y = height * (1 - wpm / MAX_WPM);
-            ctx.moveTo(0, y);
-            ctx.lineTo(width, y);
-        }
-        ctx.stroke();
-
-        // Draw labels
-        ctx.fillStyle = '#666666';
-        ctx.font = '10px var(--font-mono)';
-        for (let i = 0; i <= 10; i++) {
-            const x = width - (i * width / 10);
-            ctx.fillText(i === 0 ? 'now' : `-${i}m`, x - 10, height + 15);
-        }
-        for (let wpm = 0; wpm <= MAX_WPM; wpm += 50) {
-            const y = height * (1 - wpm / MAX_WPM);
-            ctx.fillText(`${wpm}`, 5, y - 2);
-        }
-
-        // Draw speed line
-        const samples = speedTracker.current.getSamples();
-        if (samples.length > 1) {
-            ctx.beginPath();
-            ctx.strokeStyle = '#4CAF50';
-            ctx.lineWidth = 2;
-
-            for (let i = 0; i <= width; i += 2) {
-                const timeAtPoint = now - ((width - i) / width) * GRAPH_WINDOW;
-                const speed = speedTracker.current.getAverage(timeAtPoint, WINDOW_SIZE);
-                const y = height * (1 - Math.min(speed, MAX_WPM) / MAX_WPM);
-                
-                if (i === 0) {
-                    ctx.moveTo(i, y);
-                } else {
-                    ctx.lineTo(i, y);
-                }
-            }
-            ctx.stroke();
-        }
-
-        animationFrameRef.current = requestAnimationFrame(drawGraph);
-    };
-
-    // Start/stop graph animation
-    useEffect(() => {
-        drawGraph();
-        return () => {
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-        };
-    }, []);
-
     // Keep session info in sync with localStorage
     useEffect(() => {
         currentTextRef.current = input;
@@ -352,84 +190,52 @@ const TypingPage = ({ userName }) => {
             if (inactivityTimeout.current) clearTimeout(inactivityTimeout.current);
             if (typingTimeout.current) clearTimeout(typingTimeout.current);
             if (saveTimeout.current) clearTimeout(saveTimeout.current);
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-            if (speedUpdateRef.current) {
-                clearTimeout(speedUpdateRef.current);
-            }
         };
     }, []);
 
-    // Update typing speed calculation
-    const updateTypingSpeed = (newText) => {
-        const now = Date.now();
-        const timeDiff = now - lastTypedTime.current;
-        const charsTyped = Math.max(0, newText.length - (currentTextRef.current?.length || 0));
+    const handleProcess = async () => {
+        if (!currentSessionId || processingQuestions) return;
         
-        if (timeDiff > 0 && charsTyped > 0) {
-            // Calculate WPM: (characters/5) / minutes
-            const wordsTyped = charsTyped / 5;
-            const minutesFraction = timeDiff / 60000;
-            const instantWPM = Math.min(wordsTyped / minutesFraction, MAX_WPM); // Cap at MAX_WPM
-
-            // Update all trackers
-            Object.values(speedTrackers).forEach(tracker => 
-                tracker.current.addSample(instantWPM, now)
-            );
-
-            // Update typing speed array for graph
-            setTypingSpeed(prev => {
-                const cutoffTime = now - (10 * 60 * 1000); // 10 minutes
-                const recentSamples = prev.filter(s => s.time > cutoffTime);
-                return [...recentSamples, { speed: instantWPM, time: now }];
-            });
+        setSessionInfo('Processing...');
+        try {
+            const result = await processSession(currentSessionId);
+            setQuestions(result.session.questions || []);
+            setThemes(result.session.themes || []);
+            setCategorizedIdeas(result.session.categorizedIdeas || {});
+            setSessionInfo('Processing complete');
+        } catch (error) {
+            console.error('Processing failed:', error);
+            setSessionInfo('Failed to process');
         }
-        
-        lastTypedTime.current = now;
-        currentTextRef.current = newText;
     };
 
-    // Initialize canvas size on mount and resize
+    // Add timeout to clear messages
     useEffect(() => {
-        const resizeCanvas = () => {
-            const canvas = graphCanvasRef.current;
-            if (!canvas) return;
-            
-            const rect = canvas.parentElement.getBoundingClientRect();
-            const dpr = window.devicePixelRatio;
-            
-            // Set actual size in memory
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            
-            // Set display size
-            canvas.style.width = `${rect.width}px`;
-            canvas.style.height = `${rect.height}px`;
-            
-            // Store dimensions for drawing
-            canvas.displayWidth = rect.width;
-            canvas.displayHeight = rect.height;
-        };
+        if (savingStatus) {
+            const timer = setTimeout(() => {
+                setSavingStatus('');
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [savingStatus]);
 
-        // Initial size
-        resizeCanvas();
-
-        // Handle window resizes
-        window.addEventListener('resize', resizeCanvas);
-        return () => window.removeEventListener('resize', resizeCanvas);
-    }, []);
-
-    // Add autosave interval
     useEffect(() => {
-        const interval = setInterval(async () => {
-            if (input && !isSaving) {
-                await handleSave();
-            }
-        }, 30000); // Autosave every 30 seconds
+        if (sessionInfo) {
+            const timer = setTimeout(() => {
+                setSessionInfo('');
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [sessionInfo]);
 
-        return () => clearInterval(interval);
-    }, [input, isSaving]);
+    useEffect(() => {
+        if (showInactivityWarning) {
+            const timer = setTimeout(() => {
+                setShowInactivityWarning(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [showInactivityWarning]);
 
     const handleSave = async () => {
         const textToSave = currentTextRef.current;
@@ -567,45 +373,6 @@ const TypingPage = ({ userName }) => {
         return true;
     };
 
-    const handleContainerClick = () => {
-        inputRef.current.focus();
-    };
-
-    // Add navigation handler
-    const handleNavigate = async (path) => {
-        navigate(path);
-    };
-
-    // Update speed trackers
-    useEffect(() => {
-        const updateSpeed = () => {
-            const now = Date.now();
-            
-            // Calculate current speed
-            const recentSamples = speedTracker.current.getSamples().filter(s => now - s.time <= 1000);
-            const currentSpeed = recentSamples.length > 0
-                ? recentSamples.reduce((sum, s) => sum + s.speed, 0) / recentSamples.length
-                : 0;
-
-            // Add sample
-            speedTracker.current.addSample(currentSpeed, now);
-
-            // Schedule next update
-            speedUpdateRef.current = setTimeout(updateSpeed, 1000);
-        };
-
-        updateSpeed();
-        return () => {
-            if (speedUpdateRef.current) {
-                clearTimeout(speedUpdateRef.current);
-            }
-        };
-    }, []);
-
-    useEffect(() => {
-        console.log('TypingPage mounted with userName:', userName);
-    }, [userName]);
-
     const checkAndUpdateSession = async (text, shouldClose = false) => {
         console.log('\n=== Check and Update Session ===');
         console.log('Parameters:', {
@@ -660,160 +427,56 @@ const TypingPage = ({ userName }) => {
         }
     };
 
-    const handleProcess = async () => {
-        if (!currentSessionId || processingQuestions) return;
-        
-        setSessionInfo('Processing...');
-        try {
-            const result = await processSession(currentSessionId);
-            setQuestions(result.session.questions || []);
-            setThemes(result.session.themes || []);
-            setCategorizedIdeas(result.session.categorizedIdeas || {});
-            setSessionInfo('Processing complete');
-        } catch (error) {
-            console.error('Processing failed:', error);
-            setSessionInfo('Failed to process');
-        }
-    };
-
-    // Add timeout to clear messages
-    useEffect(() => {
-        if (savingStatus) {
-            const timer = setTimeout(() => {
-                setSavingStatus('');
-            }, 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [savingStatus]);
-
-    useEffect(() => {
-        if (sessionInfo) {
-            const timer = setTimeout(() => {
-                setSessionInfo('');
-            }, 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [sessionInfo]);
-
-    useEffect(() => {
-        if (showInactivityWarning) {
-            const timer = setTimeout(() => {
-                setShowInactivityWarning(false);
-            }, 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [showInactivityWarning]);
-
     return (
         <div className="typing-page">
-            <div className="button-bar">
-                <button
-                    className="save-button save-new"
-                    onClick={handleStartNew}
-                    title="Start a new session"
-                >
-                    <FaPlus /> New
-                </button>
-                <button
-                    className="save-button save-explore"
-                    onClick={handleSave}
-                    title="Save current session"
-                >
-                    <FaSave /> Save
-                </button>
-                <button
-                    className="save-button process-button"
-                    onClick={handleProcess}
-                    disabled={!currentSessionId || processingQuestions}
-                    title="Process current session"
-                >
-                    <FaQuestion /> Process
-                </button>
-            </div>
+            <TypingControls
+                onStartNew={handleStartNew}
+                onSave={handleSave}
+                onProcess={handleProcess}
+                isProcessing={processingQuestions}
+                hasSession={!!currentSessionId}
+            />
 
             <div className="left-sidebar">
                 <ThemesPanel themes={themes} categorizedIdeas={categorizedIdeas} />
             </div>
 
+            <TypingArea
+                text={input}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                staleIndex={staleIndex}
+            />
+
             <div className="right-sidebar">
                 <QuestionsPanel 
                     questions={questions}
-                    onProcessQuestions={handleProcess}
-                    isProcessing={sessionInfo === 'Processing...'}
+                    isProcessing={processingQuestions}
                 />
             </div>
 
-            <div className="editor-container" onClick={handleContainerClick}>
-                <div className="text-container mono">
-                    {input.split('').map((char, index) => (
-                        <span key={index} style={{ opacity: index < staleIndex ? 0 : 1 }}>
-                            {char === ' ' ? '\u00A0' : char}
-                        </span>
-                    ))}
-                    <span className="cursor">|</span>
-                </div>
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={input}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    className="editor-input"
-                    autoFocus
-                />
-            </div>
+            <SpeedMonitor
+                stats={stats}
+                graphComponent={<TypingSpeedGraph speedTracker={speedTracker} />}
+                elapsedTime={elapsedTime}
+            />
 
-            <div className="stats-bar">
-                <div className="stats-group">
-                    <div className="stat-item">
-                        <span className="stat-value">{stats.current}</span>
-                        <span className="stat-label">Current WPM</span>
-                    </div>
-                    <div className="stat-item">
-                        <span className="stat-value">{stats.peak}</span>
-                        <span className="stat-label">10min Peak</span>
-                    </div>
+            {(savingStatus || sessionInfo) && (
+                <div className="status-container">
+                    {savingStatus && (
+                        <div className={`status-message ${savingStatus ? 'visible' : ''}`}>
+                            {savingStatus}
+                        </div>
+                    )}
+                    {sessionInfo && (
+                        <div className={`session-info ${sessionInfo ? 'visible' : ''}`}>
+                            {sessionInfo}
+                        </div>
+                    )}
                 </div>
-                <div className="stats-group">
-                    <div className="stat-item">
-                        <span className="stat-value">{input.length}</span>
-                        <span className="stat-label">Characters</span>
-                    </div>
-                    <div className="stat-item">
-                        <span className="stat-value">{elapsedTime}</span>
-                        <span className="stat-label">Elapsed</span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="typing-speed-graph">
-                <canvas
-                    ref={graphCanvasRef}
-                    className="graph-canvas"
-                    width={800}
-                    height={80}
-                />
-            </div>
-
-            <div className="status-container">
-                {savingStatus && (
-                    <div className={`status-message ${savingStatus ? 'visible' : ''}`}>
-                        {savingStatus}
-                    </div>
-                )}
-                {sessionInfo && (
-                    <div className={`status-message ${sessionInfo ? 'visible' : ''}`}>
-                        {sessionInfo}
-                    </div>
-                )}
-                {showInactivityWarning && (
-                    <div className="status-message visible">
-                        Inactivity detected, session will be auto-saved soon
-                    </div>
-                )}
-            </div>
+            )}
         </div>
     );
 }
 
-export default TypingPage;
+export default TypingPage; 
